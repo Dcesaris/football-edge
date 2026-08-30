@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Match } from '../types';
-import { fetchFixtures } from '../services/api';
+import { fetchLiveFixtures } from '../services/api';
 import MatchCard from '../components/MatchCard';
 import { RefreshCw } from 'lucide-react';
 
@@ -18,9 +18,8 @@ export default function LivePage({ onSelectMatch }: LivePageProps) {
     setLoading(true);
     setError(null);
     try {
-      const date = new Date().toISOString().split('T')[0];
-      const data = await fetchFixtures(date, true);
-      setMatches(data.filter((m) => m.status === 'live'));
+      const data = await fetchLiveFixtures();
+      setMatches(data);
       setLastUpdate(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar jogos ao vivo');

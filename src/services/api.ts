@@ -114,6 +114,19 @@ export interface AnalysisResponse {
   fixtureId: number;
 }
 
+// Short name: take first 3 meaningful chars, not last word
+function makeShortName(name: string): string {
+  if (!name) return '???';
+  const clean = name.replace(/[^a-zA-ZÀ-ÿ\s]/g, '').trim();
+  if (clean.length <= 3) return clean.toUpperCase();
+  // Take first 3 letters of first word
+  const words = clean.split(/\s+/);
+  if (words.length === 1) return words[0].substring(0, 3).toUpperCase();
+  // Multiple words: first letter of first 2-3 words
+  const initials = words.slice(0, 3).map((w) => w[0]).join('').toUpperCase();
+  return initials.substring(0, 3);
+}
+
 // Convert API-Football fixture to our Match type
 function apiFixtureToMatch(f: APIFootballFixtureResponse): Match {
   const statusShort = f.fixture.status.short;
@@ -127,7 +140,7 @@ function apiFixtureToMatch(f: APIFootballFixtureResponse): Match {
   const teamToTeam = (t: APIFootballFixtureResponse['teams']['home']): Team => ({
     id: String(t.id),
     name: t.name,
-    shortName: t.name.split(' ').pop()?.substring(0, 3).toUpperCase() || t.name.substring(0, 3).toUpperCase(),
+    shortName: makeShortName(t.name),
     shield: t.logo || '',
   });
 
@@ -143,7 +156,8 @@ function apiFixtureToMatch(f: APIFootballFixtureResponse): Match {
       id: String(f.league.id),
       name: f.league.name,
       country: f.league.country,
-      badge: f.league.flag || '',
+      badge: f.league.logo || '',
+      flag: f.league.flag || '',
     },
     date: dateStr,
     time,
@@ -159,11 +173,13 @@ function apiFixtureToMatch(f: APIFootballFixtureResponse): Match {
 
 // Public API
 
-export async function fetchFixtures(date: string, live = false): Promise<Match[]> {
-  const data = await fetchFunction<FixturesApiResponse>('fixtures', {
-    date,
-    live: live ? 'true' : 'false',
-  });
+export async function fetchFixtures(date: string): Promise<Match[]> {
+  const data = await fetchFunction<FixturesApiResponse>('fixtures', { date });
+  return (data.fixtures || []).map(apiFixtureToMatch);
+}
+
+export async function fetchLiveFixtures(): Promise<Match[]> {
+  const data = await fetchFunction<FixturesApiResponse>('fixtures', { live: 'true' });
   return (data.fixtures || []).map(apiFixtureToMatch);
 }
 

@@ -302,6 +302,27 @@ body {
 .team-name {
   font-size: 14px;
   font-weight: 600;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 360px) {
+  .team-name {
+    max-width: 90px;
+    font-size: 12px;
+  }
+}
+
+.team-name-multiline {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  max-width: 120px;
+  font-size: 13px;
+  line-height: 1.2;
 }
 
 .team-score {
@@ -1185,6 +1206,8 @@ body {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
 }
 
 .team-shield-placeholder.away {

@@ -28,6 +28,7 @@ export interface League {
   name: string;
   country: string;
   badge: string;
+  flag: string;
 }
 
 export interface MatchStats {

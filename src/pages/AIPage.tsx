@@ -1,29 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Brain, AlertTriangle } from 'lucide-react';
-import { analyzeMatch } from '../services/api';
+import { checkStatus } from '../services/api';
 
 const profileLabels = { conservative: 'Conservador', balanced: 'Equilibrado', aggressive: 'Agressivo' };
 const reasoningLabels = { fast: 'Rápido', high: 'Alto', maximum: 'Máximo' };
-const decisionLabels: Record<string, string> = { ENTER: 'ENTRAR', WATCH: 'OBSERVAR', NO_BET: 'SEM ENTRADA' };
 
 export default function AIPage() {
   const [profile, setProfile] = useState<'conservative' | 'balanced' | 'aggressive'>('balanced');
   const [reasoning, setReasoning] = useState<'fast' | 'high' | 'maximum'>('high');
-  const [analyzing, setAnalyzing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [nvidiaConfigured, setNvidiaConfigured] = useState<boolean | null>(null);
 
-  const handleAnalyze = async () => {
-    setAnalyzing(true);
-    setError(null);
-    try {
-      // AIPage standalone needs a match context - for now show instruction
-      setError('Selecione uma partida e use a aba IA para analisar');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Análise falhou');
-    } finally {
-      setAnalyzing(false);
-    }
-  };
+  useEffect(() => {
+    checkStatus().then((s) => setNvidiaConfigured(s.nvidiaConfigured)).catch(() => setNvidiaConfigured(false));
+  }, []);
 
   return (
     <>
@@ -43,7 +32,9 @@ export default function AIPage() {
 
       <div className="ai-model-info">
         <span className="model-badge primary">Kimi K3</span>
-        <span className="model-badge">DEMO — ainda não conectado</span>
+        <span className="model-badge">
+          {nvidiaConfigured === null ? 'Verificando...' : nvidiaConfigured ? 'CONFIGURADO' : 'NÃO CONFIGURADO'}
+        </span>
       </div>
 
       <div className="ai-controls">
@@ -78,24 +69,13 @@ export default function AIPage() {
         </div>
       </div>
 
-      <button
-        className="btn-analyze-ai"
-        onClick={handleAnalyze}
-        disabled={analyzing}
-      >
-        {analyzing ? '⏳ Analisando...' : '⚡ ANALISAR COM IA'}
-      </button>
-
-      {error && (
-        <div className="empty-state" style={{ marginTop: 16 }}>
-          <AlertTriangle size={48} style={{ color: 'var(--text-muted)', marginBottom: 16 }} />
-          <div className="empty-state-title">IA não configurada</div>
-          <div className="empty-state-text">
-            Selecione uma partida e use a aba IA para analisar mercados específicos.
-            Configure NVIDIA_API_KEY para ativar a análise.
-          </div>
+      <div className="empty-state" style={{ marginTop: 16 }}>
+        <Brain size={48} style={{ color: 'var(--text-muted)', marginBottom: 16 }} />
+        <div className="empty-state-title">Selecione uma partida</div>
+        <div className="empty-state-text">
+          Abra uma partida e use a aba IA para iniciar uma análise.
         </div>
-      )}
+      </div>
     </>
   );
 }

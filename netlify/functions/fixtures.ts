@@ -1,14 +1,5 @@
-import type { APIFootballFixture, HIDDEN_STATUSES } from './types';
+import type { APIFootballFixture } from './types';
 import { apiFootballFetch, jsonResponse, errorResponse, handleCORS } from './utils';
-
-const LIVE_STATUSES = ['1H', 'HT', '2H', 'ET', 'BT', 'P'];
-
-interface FixturesQuery {
-  date?: string;
-  live?: string;
-  league?: string;
-  season?: string;
-}
 
 export default async function handler(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') {
@@ -23,49 +14,35 @@ export default async function handler(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const date = url.searchParams.get('date');
   const live = url.searchParams.get('live');
-  const league = url.searchParams.get('league');
-  const season = url.searchParams.get('season');
 
   if (!date && !live) {
     return errorResponse('Missing required parameter: date or live', 400);
   }
 
   try {
-    const fixtures: APIFootballFixture[] = [];
+    let fixtures: APIFootballFixture[] = [];
 
-    // Fetch fixtures by date
-    if (date) {
-      const params: Record<string, string> = { date };
-      if (league) params.league = league;
-      if (season) params.season = season;
-
-      const { data } = await apiFootballFetch<APIFootballFixture[]>(
-        'fixtures',
-        params,
-        apiKey,
-        false,
-      );
-      fixtures.push(...data.response);
-    }
-
-    // Fetch live fixtures
     if (live === 'true') {
+      // Live: ONLY use live=all (1 API call)
       const { data } = await apiFootballFetch<APIFootballFixture[]>(
         'fixtures',
         { live: 'all' },
         apiKey,
         true,
       );
-      // Merge without duplicates
-      const existingIds = new Set(fixtures.map((f) => f.fixture.id));
-      data.response.forEach((f) => {
-        if (!existingIds.has(f.fixture.id)) {
-          fixtures.push(f);
-        }
-      });
+      fixtures = data.response;
+    } else if (date) {
+      // Date: fetch by date (1 API call)
+      const { data } = await apiFootballFetch<APIFootballFixture[]>(
+        'fixtures',
+        { date },
+        apiKey,
+        false,
+      );
+      fixtures = data.response;
     }
 
-    // Filter out hidden statuses
+    // Filter out finished/hidden statuses
     const filtered = fixtures.filter((f) => {
       const status = f.fixture.status.short;
       return !['FT', 'AET', 'PEN', 'CANC', 'ABD', 'AWD', 'WO', 'PST'].includes(status);

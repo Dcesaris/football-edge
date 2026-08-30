@@ -12,20 +12,13 @@ interface AnalyzeRequest {
     minute?: number;
     score?: { home: number; away: number };
   };
-  statistics?: Record<string, unknown>;
-  xG?: { home: number; away: number };
-  shots?: { home: number; away: number };
-  shotsOnTarget?: { home: number; away: number };
-  corners?: { home: number; away: number };
-  cards?: { home: number; away: number };
-  lineups?: unknown[];
-  players?: unknown[];
+  statistics?: Record<string, number | null>;
   odds?: unknown[];
-  form?: { home: string[]; away: string[] };
   h2h?: unknown[];
-  injuries?: unknown[];
   profile: 'conservative' | 'balanced' | 'aggressive';
   reasoning: 'fast' | 'high' | 'maximum';
+  dataQuality?: string;
+  missingData?: string[];
 }
 
 interface AnalysisEntry {
@@ -52,30 +45,32 @@ interface AnalysisResponse {
 function buildPrompt(data: AnalyzeRequest): string {
   const isLive = data.fixture.status !== 'NS';
   const statusContext = isLive
-    ? `LIVE MATCH - Minute ${data.fixture.minute || 0}, Score: ${data.fixture.score?.home ?? 0}-${data.fixture.score?.away ?? 0}`
+    ? `LIVE MATCH - Minute ${data.fixture.minute || 0}, Score: ${data.fixture.score?.home ?? '?'}-${data.fixture.score?.away ?? '?'}`
     : 'PRE-MATCH';
+
+  const missingDataStr = data.missingData?.length
+    ? `\nMISSING DATA (do NOT assume these are zero): ${data.missingData.join(', ')}`
+    : '';
+
+  const statsStr = data.statistics
+    ? Object.entries(data.statistics)
+        .map(([k, v]) => `  ${k}: ${v != null ? v : 'N/A'}`)
+        .join('\n')
+    : '  No statistics available';
 
   return `You are a professional football betting analyst. Analyze this match and find value opportunities.
 
 MATCH: ${data.fixture.home} vs ${data.fixture.away}
 League: ${data.fixture.league}
 Status: ${statusContext}
+Data Quality: ${data.dataQuality || 'UNKNOWN'}
+${missingDataStr}
 
-STATISTICS:
-${JSON.stringify(data.statistics || {}, null, 2)}
-
-xG: Home ${data.xG?.home ?? 'N/A'} - Away ${data.xG?.away ?? 'N/A'}
-Shots: Home ${data.shots?.home ?? 'N/A'} - Away ${data.shots?.away ?? 'N/A'}
-Shots on Target: Home ${data.shotsOnTarget?.home ?? 'N/A'} - Away ${data.shotsOnTarget?.away ?? 'N/A'}
-Corners: Home ${data.corners?.home ?? 'N/A'} - Away ${data.corners?.away ?? 'N/A'}
-Cards: Home ${data.cards?.home ?? 'N/A'} - Away ${data.cards?.away ?? 'N/A'}
+STATISTICS (null = not available, NOT zero):
+${statsStr}
 
 ODDS AVAILABLE:
 ${JSON.stringify(data.odds || [], null, 2)}
-
-RECENT FORM:
-Home: ${(data.form?.home || []).join(', ') || 'N/A'}
-Away: ${(data.form?.away || []).join(', ') || 'N/A'}
 
 H2H (last 5):
 ${JSON.stringify(data.h2h || [], null, 2)}
@@ -83,14 +78,15 @@ ${JSON.stringify(data.h2h || [], null, 2)}
 ANALYSIS PROFILE: ${data.profile}
 REASONING LEVEL: ${data.reasoning}
 
-RULES:
-1. Only recommend markets where you have VERIFIABLE current odds
-2. Calculate fair odds from estimated probability
-3. Only recommend ENTER if edge > 5% and risk is acceptable for the profile
-4. Maximum 3 opportunities
-5. If no good opportunity exists, return NO_BET for all
-6. Never fabricate data or odds
-7. Distinguish between LIVE data and PRE-MATCH data
+CRITICAL RULES:
+1. NEVER assume null/missing data means zero. A missing stat is NOT zero.
+2. NEVER fabricate statistics that are not provided.
+3. NEVER fabricate odds. Only use VERIFIABLE current odds from the data.
+4. If a stat is null/missing, acknowledge it as unknown in your analysis.
+5. Only recommend ENTER if edge > 5% AND you have a verifiable odd.
+6. Without a verifiable odd, decision MUST be NO_BET.
+7. Reduce confidence when data quality is PARTIAL or SCORE_ONLY.
+8. Maximum 3 opportunities. If no good opportunity, return NO_BET for all.
 
 Return a JSON array of analysis entries. Each entry must have:
 - market: string

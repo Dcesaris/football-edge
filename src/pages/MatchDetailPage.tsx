@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { TabType } from '../types';
-import { fetchFixtureDetail, fetchFixtureAnalysis, analyzeMatch, type FixtureDetailResponse, type AnalysisResponse } from '../services/api';
+import { fetchFixtureDetail, fetchFixtureAnalysis, analyzeMatch, checkStatus, type FixtureDetailResponse, type AnalysisResponse } from '../services/api';
 import { ArrowLeft, Brain, AlertTriangle } from 'lucide-react';
 
 interface MatchDetailPageProps {
@@ -21,6 +21,19 @@ const tabs: { key: TabType; label: string }[] = [
 
 const decisionLabels: Record<string, string> = { ENTER: 'ENTRAR', WATCH: 'OBSERVAR', NO_BET: 'SEM ENTRADA' };
 
+// Get stat value, never convert null/undefined to 0
+function getStatSafe(type: string, data: Array<{ type: string; value: string | number | null }>): number | null {
+  const found = data.find((s) => s.type === type);
+  if (!found || found.value == null || found.value === '') return null;
+  const num = typeof found.value === 'number' ? found.value : parseInt(String(found.value), 10);
+  return isNaN(num) ? null : num;
+}
+
+function getStatDisplay(type: string, data: Array<{ type: string; value: string | number | null }>): string {
+  const val = getStatSafe(type, data);
+  return val != null ? String(val) : '—';
+}
+
 export default function MatchDetailPage({ matchId, onBack }: MatchDetailPageProps) {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [detail, setDetail] = useState<FixtureDetailResponse | null>(null);
@@ -28,11 +41,16 @@ export default function MatchDetailPage({ matchId, onBack }: MatchDetailPageProp
   const [loading, setLoading] = useState(true);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nvidiaConfigured, setNvidiaConfigured] = useState<boolean | null>(null);
 
   const fId = parseInt(matchId, 10);
   const isLive = detail?.fixture?.fixture?.status?.short
     ? ['1H', 'HT', '2H', 'ET', 'BT', 'P'].includes(detail.fixture.fixture.status.short)
     : false;
+
+  useEffect(() => {
+    checkStatus().then((s) => setNvidiaConfigured(s.nvidiaConfigured)).catch(() => setNvidiaConfigured(false));
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -62,18 +80,30 @@ export default function MatchDetailPage({ matchId, onBack }: MatchDetailPageProp
   const lineups = detail?.lineups;
   const players = detail?.players;
   const h2h = analysis?.h2h;
-  const predictions = analysis?.predictions;
   const odds = analysis?.odds;
 
   const homeName = f?.teams?.home?.name || 'Casa';
   const awayName = f?.teams?.away?.name || 'Fora';
-  const homeShort = homeName.split(' ').pop()?.substring(0, 3).toUpperCase() || 'HOM';
-  const awayShort = awayName.split(' ').pop()?.substring(0, 3).toUpperCase() || 'AWY';
+  const homeLogo = f?.teams?.home?.logo;
+  const awayLogo = f?.teams?.away?.logo;
   const scoreHome = f?.goals?.home;
   const scoreAway = f?.goals?.away;
   const minute = f?.fixture?.status?.elapsed;
   const statusShort = f?.fixture?.status?.short;
   const isLiveMatch = statusShort ? ['1H', 'HT', '2H', 'ET', 'BT', 'P'].includes(statusShort) : false;
+
+  // Data quality calculation
+  const hasStats = stats && stats.length >= 2 && stats[0]?.statistics?.length > 0;
+  const hasLineups = lineups && lineups.length > 0;
+  const hasPlayers = players && players.length > 0;
+  const hasOdds = Array.isArray(odds) && odds.length > 0;
+
+  let dataQuality: 'FULL' | 'PARTIAL' | 'SCORE_ONLY' = 'SCORE_ONLY';
+  if (hasStats && hasOdds) dataQuality = 'FULL';
+  else if (hasStats || hasLineups || hasPlayers) dataQuality = 'PARTIAL';
+
+  const qualityBadge = dataQuality === 'FULL' ? 'DADOS COMPLETOS'
+    : dataQuality === 'PARTIAL' ? 'DADOS PARCIAIS' : 'SÓ PLACAR';
 
   if (loading) {
     return (
@@ -105,14 +135,41 @@ export default function MatchDetailPage({ matchId, onBack }: MatchDetailPageProp
       <div className="match-detail-header">
         <button onClick={onBack} className="back-btn"><ArrowLeft size={16} /><span>Voltar</span></button>
         <div className="match-detail-competition">
-          {f.league?.flag || ''} {f.league?.name}
+          {f.league?.flag && (
+            <img
+              src={f.league.flag}
+              alt={f.league?.country || ''}
+              style={{ width: 16, height: 12, objectFit: 'contain', marginRight: 4, verticalAlign: 'middle' }}
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
+          )}
+          {f.league?.logo && (
+            <img
+              src={f.league.logo}
+              alt={f.league?.name || ''}
+              style={{ width: 16, height: 16, objectFit: 'contain', marginRight: 4, verticalAlign: 'middle', borderRadius: 2 }}
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
+          )}
+          {f.league?.name}
+          <span style={{ marginLeft: 8, fontSize: 10, padding: '2px 6px', borderRadius: 8, background: dataQuality === 'FULL' ? 'var(--green-dim)' : dataQuality === 'PARTIAL' ? 'var(--yellow-dim)' : 'var(--border)', color: dataQuality === 'FULL' ? 'var(--green)' : dataQuality === 'PARTIAL' ? 'var(--yellow)' : 'var(--text-muted)' }}>
+            {qualityBadge}
+          </span>
         </div>
         <div className="match-detail-teams">
           <div className="match-detail-team">
             <div className="team-shield-placeholder large">
-              <span className="team-shield-initial">{homeShort[0]}</span>
+              {homeLogo && (
+                <img
+                  src={homeLogo}
+                  alt={homeName}
+                  style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: 6, position: 'absolute' }}
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+              )}
+              <span className="team-shield-initial">{homeName[0] || '?'}</span>
             </div>
-            <div className="match-detail-team-name">{homeShort}</div>
+            <div className="match-detail-team-name">{homeName}</div>
           </div>
           <div>
             {scoreHome != null && scoreAway != null ? (
@@ -126,9 +183,17 @@ export default function MatchDetailPage({ matchId, onBack }: MatchDetailPageProp
           </div>
           <div className="match-detail-team">
             <div className="team-shield-placeholder large">
-              <span className="team-shield-initial">{awayShort[0]}</span>
+              {awayLogo && (
+                <img
+                  src={awayLogo}
+                  alt={awayName}
+                  style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: 6, position: 'absolute' }}
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+              )}
+              <span className="team-shield-initial">{awayName[0] || '?'}</span>
             </div>
-            <div className="match-detail-team-name">{awayShort}</div>
+            <div className="match-detail-team-name">{awayName}</div>
           </div>
         </div>
       </div>
@@ -150,8 +215,8 @@ export default function MatchDetailPage({ matchId, onBack }: MatchDetailPageProp
         {activeTab === 'ai' && (
           <AITab
             matchId={fId}
-            home={homeShort}
-            away={awayShort}
+            home={homeName}
+            away={awayName}
             league={f.league?.name || ''}
             status={statusShort || 'NS'}
             minute={minute || undefined}
@@ -160,6 +225,9 @@ export default function MatchDetailPage({ matchId, onBack }: MatchDetailPageProp
             analysis={analysis}
             analysisLoading={analysisLoading}
             onPrepareAnalysis={handlePrepareAnalysis}
+            hasOdds={hasOdds}
+            nvidiaConfigured={nvidiaConfigured}
+            dataQuality={dataQuality}
           />
         )}
         {activeTab === 'odds' && <OddsTab odds={odds} onPrepareAnalysis={handlePrepareAnalysis} analysisLoading={analysisLoading} />}
@@ -187,17 +255,17 @@ export default function MatchDetailPage({ matchId, onBack }: MatchDetailPageProp
 }
 
 function OverviewTab({ stats }: { stats: FixtureDetailResponse['statistics'] | undefined }) {
-  if (!stats || stats.length < 2) {
-    return <div className="empty-state"><div className="empty-state-title">Sem estatísticas</div></div>;
+  if (!stats || stats.length < 2 || !stats[0]?.statistics?.length) {
+    return (
+      <div className="empty-state">
+        <div className="empty-state-title">Estatísticas</div>
+        <div className="empty-state-text">Esta competição possui cobertura limitada.</div>
+      </div>
+    );
   }
 
   const homeStats = stats[0]?.statistics || [];
   const awayStats = stats[1]?.statistics || [];
-
-  const getStat = (type: string, data: typeof homeStats): number => {
-    const found = data.find((s) => s.type === type);
-    return typeof found?.value === 'number' ? found.value : parseInt(String(found?.value || '0'), 10) || 0;
-  };
 
   const comparisons = [
     { label: 'Posse', type: 'Ball Possession' },
@@ -213,16 +281,18 @@ function OverviewTab({ stats }: { stats: FixtureDetailResponse['statistics'] | u
     <div className="comparison-section">
       <div className="comparison-title">Comparação entre Times</div>
       {comparisons.map((c) => {
-        const home = getStat(c.type, homeStats);
-        const away = getStat(c.type, awayStats);
-        const total = home + away;
-        const homePct = total > 0 ? (home / total) * 100 : 50;
+        const home = getStatSafe(c.type, homeStats);
+        const away = getStatSafe(c.type, awayStats);
+        const homeVal = home ?? 0;
+        const awayVal = away ?? 0;
+        const total = homeVal + awayVal;
+        const homePct = total > 0 ? (homeVal / total) * 100 : 50;
         return (
           <div key={c.label} className="comparison-row">
             <div className="comparison-values">
-              <span>{c.type.includes('Possession') ? `${home}` : home}</span>
+              <span>{home != null ? (c.type.includes('Possession') ? `${home}` : home) : '—'}</span>
               <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{c.label}</span>
-              <span>{c.type.includes('Possession') ? `${away}` : away}</span>
+              <span>{away != null ? (c.type.includes('Possession') ? `${away}` : away) : '—'}</span>
             </div>
             <div className="comparison-bar">
               <div className="comparison-bar-home" style={{ width: `${homePct}%` }} />
@@ -236,7 +306,8 @@ function OverviewTab({ stats }: { stats: FixtureDetailResponse['statistics'] | u
 }
 
 function AITab({
-  matchId, home, away, league, status, minute, score, stats, analysis, analysisLoading, onPrepareAnalysis,
+  matchId, home, away, league, status, minute, score, stats, analysis, analysisLoading,
+  onPrepareAnalysis, hasOdds, nvidiaConfigured, dataQuality,
 }: {
   matchId: number;
   home: string;
@@ -249,50 +320,66 @@ function AITab({
   analysis: FixtureDetailResponse | null;
   analysisLoading: boolean;
   onPrepareAnalysis: () => void;
+  hasOdds: boolean;
+  nvidiaConfigured: boolean | null;
+  dataQuality: string;
 }) {
   const [result, setResult] = useState<AnalysisResponse | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
 
   const handleAnalyze = async () => {
+    if (!hasOdds) {
+      setAnalyzeError('SEM ODDS DISPONÍVEIS — Não é possível calcular valor sem uma odd atual verificável.');
+      return;
+    }
     setAnalyzing(true);
     setAnalyzeError(null);
     try {
-      // Build stats payload from API data
       const homeStats = stats?.[0]?.statistics || [];
       const awayStats = stats?.[1]?.statistics || [];
 
-      const getStat = (type: string, data: typeof homeStats): number => {
-        const found = data.find((s) => s.type === type);
-        return typeof found?.value === 'number' ? found.value : parseInt(String(found?.value || '0'), 10) || 0;
-      };
+      const getOptional = (type: string, data: typeof homeStats): number | null => getStatSafe(type, data);
+
+      const statistics: Record<string, number | null> = {};
+      const possH = getOptional('Ball Possession', homeStats);
+      const possA = getOptional('Ball Possession', awayStats);
+      if (possH != null) statistics.homePossession = possH;
+      if (possA != null) statistics.awayPossession = possA;
+      const shotsH = getOptional('Total Shots', homeStats);
+      const shotsA = getOptional('Total Shots', awayStats);
+      if (shotsH != null) statistics.homeShots = shotsH;
+      if (shotsA != null) statistics.awayShots = shotsA;
+      const sotH = getOptional('Shots on Goal', homeStats);
+      const sotA = getOptional('Shots on Goal', awayStats);
+      if (sotH != null) statistics.homeShotsOnTarget = sotH;
+      if (sotA != null) statistics.awayShotsOnTarget = sotA;
+      const cornersH = getOptional('Corner Kicks', homeStats);
+      const cornersA = getOptional('Corner Kicks', awayStats);
+      if (cornersH != null) statistics.homeCorners = cornersH;
+      if (cornersA != null) statistics.awayCorners = cornersA;
+      const foulsH = getOptional('Fouls', homeStats);
+      const foulsA = getOptional('Fouls', awayStats);
+      if (foulsH != null) statistics.homeFouls = foulsH;
+      if (foulsA != null) statistics.awayFouls = foulsA;
+
+      // Determine missing data
+      const missingData: string[] = [];
+      if (possH == null || possA == null) missingData.push('possession');
+      if (shotsH == null || shotsA == null) missingData.push('shots');
+      if (sotH == null || sotA == null) missingData.push('shots_on_target');
+      if (cornersH == null || cornersA == null) missingData.push('corners');
+      if (foulsH == null || foulsA == null) missingData.push('fouls');
 
       const payload = {
-        fixture: {
-          id: matchId,
-          home,
-          away,
-          league,
-          status,
-          minute,
-          score,
-        },
-        statistics: {
-          homePossession: getStat('Ball Possession', homeStats),
-          awayPossession: getStat('Ball Possession', awayStats),
-          homeShots: getStat('Total Shots', homeStats),
-          awayShots: getStat('Total Shots', awayStats),
-          homeShotsOnTarget: getStat('Shots on Goal', homeStats),
-          awayShotsOnTarget: getStat('Shots on Goal', awayStats),
-          homeCorners: getStat('Corner Kicks', homeStats),
-          awayCorners: getStat('Corner Kicks', awayStats),
-          homeFouls: getStat('Fouls', homeStats),
-          awayFouls: getStat('Fouls', awayStats),
-        },
+        fixture: { id: matchId, home, away, league, status, minute, score },
+        statistics: Object.keys(statistics).length > 0 ? statistics : undefined,
         odds: analysis?.odds || [],
         h2h: analysis?.h2h || [],
         profile: 'balanced' as const,
         reasoning: 'high' as const,
+        dataQuality,
+        missingData: missingData.length > 0 ? missingData : undefined,
       };
 
       const response = await analyzeMatch(payload);
@@ -317,7 +404,9 @@ function AITab({
 
       <div className="ai-model-info">
         <span className="model-badge primary">Kimi K3</span>
-        <span className="model-badge">DEMO — ainda não conectado</span>
+        <span className="model-badge">
+          {nvidiaConfigured === null ? 'Verificando...' : nvidiaConfigured ? 'ONLINE' : 'NÃO CONFIGURADO'}
+        </span>
       </div>
 
       {!analysis && (
@@ -335,10 +424,10 @@ function AITab({
         <button
           className="btn-analyze-ai"
           onClick={handleAnalyze}
-          disabled={analyzing}
+          disabled={analyzing || !hasOdds}
           style={{ marginTop: 16 }}
         >
-          {analyzing ? '⏳ Analisando...' : '⚡ ANALISAR COM IA'}
+          {analyzing ? '⏳ Analisando...' : !hasOdds ? 'SEM ODDS' : '⚡ ANALISAR COM IA'}
         </button>
       )}
 
@@ -420,7 +509,7 @@ function OddsTab({ odds, onPrepareAnalysis, analysisLoading }: { odds: unknown; 
   if (oddsList.length === 0) {
     return (
       <div className="empty-state">
-        <div className="empty-state-title">Odds não disponíveis</div>
+        <div className="empty-state-title">Odds</div>
         <div className="empty-state-text">Carregue os dados de análise para ver odds</div>
         <button className="btn-analyze" style={{ marginTop: 16 }} onClick={onPrepareAnalysis} disabled={analysisLoading}>
           {analysisLoading ? 'Carregando...' : 'Carregar Odds'}
@@ -442,10 +531,10 @@ function OddsTab({ odds, onPrepareAnalysis, analysisLoading }: { odds: unknown; 
         const bet = bookmaker?.bets?.[0];
         return (
           <div key={i} className="odds-row">
-            <span>{bookmaker?.name || '-'}</span>
-            <span>{bet?.name || '-'}</span>
-            <span>{bet?.values?.[0]?.value || '-'}</span>
-            <span style={{ fontWeight: 600 }}>{bet?.values?.[0]?.odd || '-'}</span>
+            <span>{bookmaker?.name || '—'}</span>
+            <span>{bet?.name || '—'}</span>
+            <span>{bet?.values?.[0]?.value || '—'}</span>
+            <span style={{ fontWeight: 600 }}>{bet?.values?.[0]?.odd || '—'}</span>
           </div>
         );
       })}
@@ -454,17 +543,17 @@ function OddsTab({ odds, onPrepareAnalysis, analysisLoading }: { odds: unknown; 
 }
 
 function StatsTab({ stats }: { stats: FixtureDetailResponse['statistics'] | undefined }) {
-  if (!stats || stats.length < 2) {
-    return <div className="empty-state"><div className="empty-state-title">Sem estatísticas</div></div>;
+  if (!stats || stats.length < 2 || !stats[0]?.statistics?.length) {
+    return (
+      <div className="empty-state">
+        <div className="empty-state-title">Estatísticas</div>
+        <div className="empty-state-text">Esta competição possui cobertura limitada.</div>
+      </div>
+    );
   }
 
   const homeStats = stats[0]?.statistics || [];
   const awayStats = stats[1]?.statistics || [];
-
-  const getStat = (type: string, data: typeof homeStats): string => {
-    const found = data.find((s) => s.type === type);
-    return String(found?.value ?? '-');
-  };
 
   const statTypes = [
     'Ball Possession', 'Total Shots', 'Shots on Goal', 'Corner Kicks',
@@ -477,9 +566,9 @@ function StatsTab({ stats }: { stats: FixtureDetailResponse['statistics'] | unde
         <div key={type} className="stat-box">
           <div className="stat-label">{type}</div>
           <div className="stat-values">
-            <span className="stat-home">{getStat(type, homeStats)}</span>
+            <span className="stat-home">{getStatDisplay(type, homeStats)}</span>
             <span className="stat-vs">-</span>
-            <span className="stat-away">{getStat(type, awayStats)}</span>
+            <span className="stat-away">{getStatDisplay(type, awayStats)}</span>
           </div>
         </div>
       ))}
@@ -489,7 +578,12 @@ function StatsTab({ stats }: { stats: FixtureDetailResponse['statistics'] | unde
 
 function PlayersTab({ players }: { players: FixtureDetailResponse['players'] | undefined }) {
   if (!players || players.length === 0) {
-    return <div className="empty-state"><div className="empty-state-title">Sem jogadores</div></div>;
+    return (
+      <div className="empty-state">
+        <div className="empty-state-title">Jogadores</div>
+        <div className="empty-state-text">Aguardando dados da API</div>
+      </div>
+    );
   }
 
   return (
@@ -517,7 +611,7 @@ function LineupsTab({ lineups }: { lineups: FixtureDetailResponse['lineups'] | u
     return (
       <div className="empty-state">
         <div className="empty-state-title">Escalações</div>
-        <div className="empty-state-text">Escalações ainda não disponíveis</div>
+        <div className="empty-state-text">Aguardando dados da API</div>
       </div>
     );
   }
@@ -570,7 +664,7 @@ function H2HTab({ h2h, onPrepareAnalysis, analysisLoading }: { h2h: unknown[] | 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontWeight: 600 }}>{match.teams?.home?.name}</span>
               <span style={{ fontWeight: 700, fontSize: 16 }}>
-                {match.goals?.home ?? '-'} - {match.goals?.away ?? '-'}
+                {match.goals?.home ?? '—'} - {match.goals?.away ?? '—'}
               </span>
               <span style={{ fontWeight: 600 }}>{match.teams?.away?.name}</span>
             </div>

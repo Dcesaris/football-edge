@@ -6,6 +6,41 @@ interface MatchCardProps {
   onClick: () => void;
 }
 
+function TeamLogo({ logo, name, className }: { logo?: string; name: string; className?: string }) {
+  if (logo) {
+    return (
+      <img
+        src={logo}
+        alt={name}
+        className={className}
+        style={{ width: 24, height: 24, objectFit: 'contain', borderRadius: 4 }}
+        onError={(e) => {
+          (e.target as HTMLImageElement).style.display = 'none';
+          const next = (e.target as HTMLImageElement).nextElementSibling as HTMLElement;
+          if (next) next.style.display = 'flex';
+        }}
+      />
+    );
+  }
+  return null;
+}
+
+function TeamShield({ logo, name }: { logo?: string; name: string }) {
+  return (
+    <div className="team-shield-placeholder">
+      {logo && (
+        <img
+          src={logo}
+          alt={name}
+          style={{ width: 24, height: 24, objectFit: 'contain', borderRadius: 4, position: 'absolute' }}
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+        />
+      )}
+      <span className="team-shield-initial">{name[0] || '?'}</span>
+    </div>
+  );
+}
+
 export default function MatchCard({ match, onClick }: MatchCardProps) {
   const isLive = match.status === 'live';
 
@@ -13,7 +48,16 @@ export default function MatchCard({ match, onClick }: MatchCardProps) {
     <div className="match-card" onClick={onClick}>
       <div className="match-card-header">
         <div className="match-league">
-          <span className="match-league-badge">{match.league.badge}</span>
+          {match.league.badge ? (
+            <img
+              src={match.league.badge}
+              alt={match.league.name}
+              style={{ width: 16, height: 16, objectFit: 'contain', borderRadius: 2 }}
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
+          ) : (
+            <span className="match-league-badge">⚽</span>
+          )}
           <span>{match.league.name}</span>
         </div>
         <span className={`match-time ${isLive ? 'live' : ''}`}>
@@ -24,10 +68,8 @@ export default function MatchCard({ match, onClick }: MatchCardProps) {
 
       <div className="match-teams">
         <div className="team-info">
-          <div className="team-shield-placeholder">
-            <span className="team-shield-initial">{match.home.shortName[0]}</span>
-          </div>
-          <span className="team-name">{match.home.shortName}</span>
+          <TeamShield logo={match.home.shield} name={match.home.name} />
+          <span className="team-name">{match.home.name}</span>
         </div>
         {match.score ? (
           <span className="team-score">{match.score.home} - {match.score.away}</span>
@@ -35,10 +77,8 @@ export default function MatchCard({ match, onClick }: MatchCardProps) {
           <span className="team-score" style={{ color: 'var(--text-muted)', fontSize: 14 }}>vs</span>
         )}
         <div className="team-info away">
-          <span className="team-name">{match.away.shortName}</span>
-          <div className="team-shield-placeholder away">
-            <span className="team-shield-initial">{match.away.shortName[0]}</span>
-          </div>
+          <span className="team-name">{match.away.name}</span>
+          <TeamShield logo={match.away.shield} name={match.away.name} />
         </div>
       </div>
 

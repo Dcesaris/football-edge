@@ -1,12 +1,12 @@
 import { Match, ScannerItem, AIResult, OddsData, PlayerProps, Settings, League, Team } from '../types';
 
 const leagues: League[] = [
-  { id: 'pl', name: 'Premier League', country: 'England', badge: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
-  { id: 'll', name: 'La Liga', country: 'Spain', badge: '🇪🇸' },
-  { id: 'sa', name: 'Serie A', country: 'Italy', badge: '🇮🇹' },
-  { id: 'bl', name: 'Bundesliga', country: 'Germany', badge: '🇩🇪' },
-  { id: 'cl', name: 'Champions League', country: 'Europe', badge: '🏆' },
-  { id: 'fl', name: 'Ligue 1', country: 'France', badge: '🇫🇷' },
+  { id: 'pl', name: 'Premier League', country: 'England', badge: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', flag: '' },
+  { id: 'll', name: 'La Liga', country: 'Spain', badge: '🇪🇸', flag: '' },
+  { id: 'sa', name: 'Serie A', country: 'Italy', badge: '🇮🇹', flag: '' },
+  { id: 'bl', name: 'Bundesliga', country: 'Germany', badge: '🇩🇪', flag: '' },
+  { id: 'cl', name: 'Champions League', country: 'Europe', badge: '🏆', flag: '' },
+  { id: 'fl', name: 'Ligue 1', country: 'France', badge: '🇫🇷', flag: '' },
 ];
 
 const teams: Record<string, Team> = {

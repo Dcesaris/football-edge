@@ -33,7 +33,7 @@ export default function MatchesPage({ onSelectMatch }: MatchesPageProps) {
     setError(null);
     try {
       const date = getDateForFilter(filter);
-      const data = await fetchFixtures(date, false);
+      const data = await fetchFixtures(date);
       setMatches(data);
       setLastUpdate(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
     } catch (err) {
