@@ -59,7 +59,7 @@ export interface BestEntry {
   edge: number;
   risk: RiskLevel;
   confidence: number;
-  decision: 'ENTER' | 'SKIP' | 'WAIT';
+  decision: 'ENTER' | 'WATCH' | 'NO_BET';
   explanation: string;
 }
 

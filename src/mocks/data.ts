@@ -137,7 +137,7 @@ export const mockAIResult: AIResult = {
     edge: 10.2,
     risk: 'low',
     confidence: 81,
-    decision: 'ENTER',
+    decision: 'WATCH',
     explanation: 'Arsenal averages 10.2 corners at home this season. Man City averages 4.8 conceded corners away. Head-to-head last 5 meetings averaged 9.8 corners. The line at 13 is set too high for this matchup profile.',
   },
   model: 'Kimi K3',

@@ -1,63 +1,132 @@
-import { mockSettings } from '../mocks/data';
+import { useState } from 'react';
+import { Settings as SettingsIcon, AlertTriangle } from 'lucide-react';
 
 export default function SettingsPage() {
-  const s = mockSettings;
+  const [riskProfile, setRiskProfile] = useState<'conservative' | 'balanced' | 'aggressive'>('balanced');
+  const [minEdge, setMinEdge] = useState(5.0);
+  const [minProb, setMinProb] = useState(55);
+  const [minOdd, setMinOdd] = useState(1.50);
+  const [maxRecs, setMaxRecs] = useState(3);
+  const [reasoning, setReasoning] = useState<'fast' | 'high' | 'maximum'>('high');
 
   return (
     <>
       <header className="header">
         <div className="header-logo">
-          <h1>⚙️ Settings</h1>
+          <h1>Configurações</h1>
         </div>
       </header>
 
       <div style={{ padding: '16px 0' }}>
         <div className="settings-section">
-          <div className="settings-section-title">Analysis</div>
+          <div className="settings-section-title">ANÁLISE</div>
           <div className="settings-card">
             <div className="settings-item">
-              <span className="settings-item-label">Risk Profile</span>
-              <span className="settings-item-value">{s.analysis.riskProfile}</span>
+              <span className="settings-item-label">Perfil de risco</span>
+              <div className="control-options" style={{ flex: 'none' }}>
+                {(['conservative', 'balanced', 'aggressive'] as const).map((p) => (
+                  <button
+                    key={p}
+                    className={`control-option compact ${riskProfile === p ? 'active' : ''}`}
+                    onClick={() => setRiskProfile(p)}
+                  >
+                    {p === 'conservative' ? 'Conservador' : p === 'balanced' ? 'Equilibrado' : 'Agressivo'}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="settings-item">
-              <span className="settings-item-label">Min Edge</span>
-              <span className="settings-item-value">{s.analysis.minEdge}%</span>
+              <span className="settings-item-label">Edge mínimo</span>
+              <div className="settings-control">
+                <input
+                  type="range"
+                  min={1}
+                  max={20}
+                  step={0.5}
+                  value={minEdge}
+                  onChange={(e) => setMinEdge(parseFloat(e.target.value))}
+                  className="settings-range"
+                />
+                <span className="settings-item-value">{minEdge}%</span>
+              </div>
             </div>
             <div className="settings-item">
-              <span className="settings-item-label">Min Probability</span>
-              <span className="settings-item-value">{(s.analysis.minProbability * 100).toFixed(0)}%</span>
+              <span className="settings-item-label">Probabilidade mínima</span>
+              <div className="settings-control">
+                <input
+                  type="range"
+                  min={30}
+                  max={90}
+                  step={5}
+                  value={minProb}
+                  onChange={(e) => setMinProb(parseInt(e.target.value))}
+                  className="settings-range"
+                />
+                <span className="settings-item-value">{minProb}%</span>
+              </div>
             </div>
             <div className="settings-item">
-              <span className="settings-item-label">Min Odd</span>
-              <span className="settings-item-value">{s.analysis.minOdd}</span>
+              <span className="settings-item-label">Odd mínima</span>
+              <div className="settings-control">
+                <input
+                  type="range"
+                  min={1.01}
+                  max={5.00}
+                  step={0.05}
+                  value={minOdd}
+                  onChange={(e) => setMinOdd(parseFloat(e.target.value))}
+                  className="settings-range"
+                />
+                <span className="settings-item-value">{minOdd.toFixed(2)}</span>
+              </div>
             </div>
             <div className="settings-item">
-              <span className="settings-item-label">Max Recommendations</span>
-              <span className="settings-item-value">{s.analysis.maxRecommendations}</span>
+              <span className="settings-item-label">Máx. recomendações</span>
+              <div className="control-options" style={{ flex: 'none' }}>
+                {[1, 2, 3].map((n) => (
+                  <button
+                    key={n}
+                    className={`control-option compact ${maxRecs === n ? 'active' : ''}`}
+                    onClick={() => setMaxRecs(n)}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
 
         <div className="settings-section">
-          <div className="settings-section-title">AI</div>
+          <div className="settings-section-title">IA</div>
           <div className="settings-card">
             <div className="settings-item">
-              <span className="settings-item-label">Model</span>
-              <span className="settings-item-value">{s.ai.model}</span>
+              <span className="settings-item-label">Modelo</span>
+              <span className="settings-item-value">Kimi K3</span>
             </div>
             <div className="settings-item">
               <span className="settings-item-label">Fallback</span>
-              <span className="settings-item-value">{s.ai.fallback}</span>
+              <span className="settings-item-value">Nemotron</span>
             </div>
             <div className="settings-item">
               <span className="settings-item-label">Reasoning</span>
-              <span className="settings-item-value">{s.ai.reasoning}</span>
+              <div className="control-options" style={{ flex: 'none' }}>
+                {(['fast', 'high', 'maximum'] as const).map((r) => (
+                  <button
+                    key={r}
+                    className={`control-option compact ${reasoning === r ? 'active' : ''}`}
+                    onClick={() => setReasoning(r)}
+                  >
+                    {r === 'fast' ? 'Rápido' : r === 'high' ? 'Alto' : 'Máximo'}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="settings-item">
               <span className="settings-item-label">Status</span>
               <span className="settings-item-value">
-                <span className={`status-dot ${s.ai.status}`} />
-                {s.ai.status}
+                <span className="status-dot offline" />
+                DEMO — ainda não conectado
               </span>
             </div>
           </div>
@@ -69,35 +138,31 @@ export default function SettingsPage() {
             <div className="settings-item">
               <span className="settings-item-label">API-Football</span>
               <span className="settings-item-value">
-                <span className={`status-dot ${s.api.status === 'connected' ? 'online' : 'offline'}`} />
-                {s.api.status}
+                <span className="status-dot offline" />
+                DEMO — ainda não conectado
               </span>
             </div>
             <div className="settings-item">
-              <span className="settings-item-label">Quota Remaining</span>
-              <span className="settings-item-value">{s.api.quota}</span>
-            </div>
-            <div className="settings-item">
-              <span className="settings-item-label">Last Update</span>
-              <span className="settings-item-value">{s.api.lastUpdate}</span>
+              <span className="settings-item-label">Quota</span>
+              <span className="settings-item-value">Indisponível</span>
             </div>
           </div>
         </div>
 
         <div className="settings-section">
-          <div className="settings-section-title">Preferences</div>
+          <div className="settings-section-title">PREFERÊNCIAS</div>
           <div className="settings-card">
             <div className="settings-item">
-              <span className="settings-item-label">Theme</span>
-              <span className="settings-item-value">{s.preferences.theme}</span>
+              <span className="settings-item-label">Tema</span>
+              <span className="settings-item-value">Escuro</span>
             </div>
             <div className="settings-item">
-              <span className="settings-item-label">Language</span>
-              <span className="settings-item-value">{s.preferences.language}</span>
+              <span className="settings-item-label">Idioma</span>
+              <span className="settings-item-value">Português (BR)</span>
             </div>
             <div className="settings-item">
               <span className="settings-item-label">Timezone</span>
-              <span className="settings-item-value">{s.preferences.timezone}</span>
+              <span className="settings-item-value">UTC</span>
             </div>
           </div>
         </div>

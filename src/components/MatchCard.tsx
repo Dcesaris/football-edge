@@ -1,4 +1,5 @@
 import { Match } from '../types';
+import { Zap, TrendingUp, Bot } from 'lucide-react';
 
 interface MatchCardProps {
   match: Match;
@@ -17,13 +18,15 @@ export default function MatchCard({ match, onClick }: MatchCardProps) {
         </div>
         <span className={`match-time ${isLive ? 'live' : ''}`}>
           {isLive && <span className="live-dot" />}
-          {isLive ? `${match.minute}'` : match.time}
+          {isLive ? `AO VIVO ${match.minute}'` : match.time}
         </span>
       </div>
 
       <div className="match-teams">
         <div className="team-info">
-          <span className="team-shield">{match.home.shield}</span>
+          <div className="team-shield-placeholder">
+            <span className="team-shield-initial">{match.home.shortName[0]}</span>
+          </div>
           <span className="team-name">{match.home.shortName}</span>
         </div>
         {match.score ? (
@@ -33,7 +36,9 @@ export default function MatchCard({ match, onClick }: MatchCardProps) {
         )}
         <div className="team-info away">
           <span className="team-name">{match.away.shortName}</span>
-          <span className="team-shield">{match.away.shield}</span>
+          <div className="team-shield-placeholder away">
+            <span className="team-shield-initial">{match.away.shortName[0]}</span>
+          </div>
         </div>
       </div>
 
@@ -56,18 +61,17 @@ export default function MatchCard({ match, onClick }: MatchCardProps) {
 
       {match.stats && (
         <div className="match-stats-mini">
-          <span className="stat-mini"> Shots <span className="stat-mini-value">{match.stats.shots.home}-{match.stats.shots.away}</span></span>
-          <span className="stat-mini"> Corners <span className="stat-mini-value">{match.stats.corners.home}-{match.stats.corners.away}</span></span>
-          <span className="stat-mini"> Cards <span className="stat-mini-value">{match.stats.cards.home}-{match.stats.cards.away}</span></span>
+          <span className="stat-mini"> <Zap size={10} /> <span className="stat-mini-value">{match.stats.shots.home}-{match.stats.shots.away}</span></span>
+          <span className="stat-mini"> <TrendingUp size={10} /> <span className="stat-mini-value">{match.stats.corners.home}-{match.stats.corners.away}</span></span>
         </div>
       )}
 
       <div className="match-footer">
         <div className="data-indicators">
           {match.hasOdds && <span className="data-badge odds">Odds</span>}
-          {match.hasAI && <span className="data-badge ai">AI</span>}
+          {match.hasAI && <span className="data-badge ai"><Bot size={10} /> IA</span>}
         </div>
-        <button className="btn-analyze">Analyze</button>
+        <button className="btn-analyze">Analisar</button>
       </div>
     </div>
   );

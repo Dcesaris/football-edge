@@ -93,8 +93,11 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 6px 12px;
+  justify-content: center;
+  gap: 3px;
+  padding: 8px 14px;
+  min-width: 52px;
+  min-height: 44px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all 0.2s;
@@ -103,6 +106,7 @@ body {
   background: none;
   font-size: 10px;
   font-weight: 500;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .nav-item.active {
@@ -113,12 +117,18 @@ body {
   color: var(--text-secondary);
 }
 
-.nav-icon {
-  font-size: 20px;
-  line-height: 1;
+/* Filter Tabs */
+.filter-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
-/* Header */
+.filter-tabs::-webkit-scrollbar {
+  display: none;
+}
 .header {
   display: flex;
   align-items: center;
@@ -690,13 +700,13 @@ body {
   color: white;
 }
 
-.decision-badge.SKIP {
-  background: var(--red);
-  color: white;
+.decision-badge.WATCH {
+  background: var(--yellow);
+  color: var(--bg-primary);
 }
 
-.decision-badge.WAIT {
-  background: var(--yellow);
+.decision-badge.NO_BET {
+  background: var(--text-muted);
   color: var(--bg-primary);
 }
 
@@ -1164,6 +1174,149 @@ body {
   border-radius: 2px;
 }
 
+/* Team Shield Placeholder */
+.team-shield-placeholder {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.team-shield-placeholder.away {
+  background: var(--bg-primary);
+}
+
+.team-shield-placeholder.large {
+  width: 48px;
+  height: 48px;
+}
+
+.team-shield-initial {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.team-shield-placeholder.large .team-shield-initial {
+  font-size: 20px;
+}
+
+/* Back Button */
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: var(--blue);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 0;
+  margin-bottom: 8px;
+  transition: opacity 0.2s;
+}
+
+.back-btn:hover {
+  opacity: 0.8;
+}
+
+/* Settings Controls */
+.settings-control {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.settings-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  outline: none;
+}
+
+.settings-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--blue);
+  cursor: pointer;
+  border: 2px solid var(--bg-card);
+}
+
+.settings-range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--blue);
+  cursor: pointer;
+  border: 2px solid var(--bg-card);
+}
+
+.control-option.compact {
+  padding: 4px 10px;
+  font-size: 11px;
+}
+
+/* Decision badges */
+.decision-badge.WATCH {
+  background: var(--yellow);
+  color: var(--bg-primary);
+}
+
+.decision-badge.NO_BET {
+  background: var(--text-muted);
+  color: var(--bg-primary);
+}
+
+/* Scanner responsive */
+@media (max-width: 430px) {
+  .scanner-item-body {
+    grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+    gap: 4px;
+    font-size: 11px;
+  }
+
+  .scanner-stat-label {
+    font-size: 8px;
+  }
+
+  .scanner-stat-value {
+    font-size: 11px;
+  }
+
+  .scanner-match-name {
+    font-size: 12px;
+  }
+
+  .scanner-rank {
+    font-size: 14px;
+  }
+}
+
+/* Bottom nav safe area */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .bottom-nav {
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+  }
+
+  .app-container {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+}
+
 /* Desktop */
 @media (min-width: 768px) {
   .app-container {
@@ -1186,5 +1339,9 @@ body {
 
   .stats-grid {
     padding: 0;
+  }
+
+  .settings-range {
+    width: 140px;
   }
 }

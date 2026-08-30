@@ -1,5 +1,6 @@
 import { mockMatches } from '../mocks/data';
 import MatchCard from '../components/MatchCard';
+import { RefreshCw } from 'lucide-react';
 
 interface LivePageProps {
   onSelectMatch: (id: string) => void;
@@ -12,20 +13,20 @@ export default function LivePage({ onSelectMatch }: LivePageProps) {
     <>
       <header className="header">
         <div className="header-logo">
-          <h1>🔴 Live</h1>
+          <h1>Ao Vivo</h1>
         </div>
         <div className="header-actions">
-          <button className="icon-btn">🔄</button>
+          <button className="icon-btn"><RefreshCw size={16} /></button>
         </div>
       </header>
 
       <div className="data-status">
         <span className="data-status-item">
           <span className="status-dot online" />
-          Live data active
+          Dados ao vivo ativos
         </span>
         <span className="data-status-item">
-          Updated 18s ago
+          Atualizado há 18s
         </span>
       </div>
 
@@ -33,8 +34,8 @@ export default function LivePage({ onSelectMatch }: LivePageProps) {
         {liveMatches.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-icon">🔴</div>
-            <div className="empty-state-title">No live matches</div>
-            <div className="empty-state-text">Check back when matches are in play</div>
+            <div className="empty-state-title">Nenhum jogo ao vivo</div>
+            <div className="empty-state-text">Verifique quando os jogos estiverem em andamento</div>
           </div>
         ) : (
           liveMatches.map((match) => (

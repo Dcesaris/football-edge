@@ -1,29 +1,34 @@
 import { useState } from 'react';
 import { ScannerFilter } from '../types';
 import { mockScannerItems } from '../mocks/data';
+import { RefreshCw, Zap, TrendingUp, Shield, Target } from 'lucide-react';
+
+const filterLabels: Record<ScannerFilter, string> = {
+  'all': 'Todos',
+  'high-confidence': 'Alta confiança',
+  'positive-edge': 'Edge positivo',
+  'low-risk': 'Baixo risco',
+  'goals': 'Gols',
+  'corners': 'Escanteios',
+  'cards': 'Cartões',
+  'players': 'Jogadores',
+};
 
 export default function ScannerPage() {
   const [filter, setFilter] = useState<ScannerFilter>('all');
 
-  const filters: { key: ScannerFilter; label: string }[] = [
-    { key: 'all', label: 'All' },
-    { key: 'high-confidence', label: 'High Confidence' },
-    { key: 'positive-edge', label: 'Positive Edge' },
-    { key: 'low-risk', label: 'Low Risk' },
-    { key: 'goals', label: 'Goals' },
-    { key: 'corners', label: 'Corners' },
-    { key: 'cards', label: 'Cards' },
-    { key: 'players', label: 'Players' },
-  ];
+  const filters: { key: ScannerFilter; label: string }[] = Object.entries(filterLabels).map(
+    ([key, label]) => ({ key: key as ScannerFilter, label }),
+  );
 
   return (
     <>
       <header className="header">
         <div className="header-logo">
-          <h1>🔍 Value Scanner</h1>
+          <h1>Scanner de Valor</h1>
         </div>
         <div className="header-actions">
-          <button className="icon-btn">🔄</button>
+          <button className="icon-btn"><RefreshCw size={16} /></button>
         </div>
       </header>
 
@@ -50,11 +55,13 @@ export default function ScannerPage() {
                 <div className="scanner-match-name">{item.match}</div>
                 <div className="scanner-match-league">{item.league}</div>
               </div>
-              <span className={`risk-badge ${item.risk}`}>{item.risk}</span>
+              <span className={`risk-badge ${item.risk}`}>
+                {item.risk === 'low' ? 'Baixo' : item.risk === 'moderate' ? 'Moderado' : 'Alto'}
+              </span>
             </div>
             <div className="scanner-item-body">
               <div>
-                <div className="scanner-stat-label">Market</div>
+                <div className="scanner-stat-label">Mercado</div>
                 <div className="scanner-stat-value">{item.market}</div>
               </div>
               <div>
@@ -66,7 +73,7 @@ export default function ScannerPage() {
                 <div className="scanner-stat-value">{(item.probability * 100).toFixed(0)}%</div>
               </div>
               <div>
-                <div className="scanner-stat-label">Fair Odd</div>
+                <div className="scanner-stat-label">Justa</div>
                 <div className="scanner-stat-value">{item.fairOdd.toFixed(2)}</div>
               </div>
               <div>
