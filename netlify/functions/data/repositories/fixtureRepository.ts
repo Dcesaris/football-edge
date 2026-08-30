@@ -127,8 +127,7 @@ export async function getFixturesByDate(date: string, leagueApiIds?: number[]): 
 
   if (leagueApiIds && leagueApiIds.length > 0) {
     // Get league IDs first
-    const { supabaseSelect: sl } = await import('../supabase');
-    const leagues = await sl<{ id: number }>('leagues', {
+    const leagues = await supabaseSelect<{ id: number }>('leagues', {
       select: 'id',
       filters: { api_id: { in: leagueApiIds } },
     });
