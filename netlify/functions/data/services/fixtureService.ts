@@ -2,7 +2,7 @@ import type { APIFootballFixture } from '../../types';
 import { upsertLeague } from '../repositories/leagueRepository';
 import { upsertTeam } from '../repositories/teamRepository';
 import { upsertFixture, getFixtureByApiId, updateFixtureStatus, getFixturesByDate as dbGetFixturesByDate, getLiveFixtures as dbGetLiveFixtures } from '../repositories/fixtureRepository';
-import { acquireSyncLock, releaseSyncLock, getRawCache } from '../repositories/cacheRepository';
+import { acquireSyncLock, releaseSyncLock, getRawCache, logApiUsage } from '../repositories/cacheRepository';
 import { apiFootballFetch } from '../providers/apiFootball';
 import { TTL, getFixtureTTL, isStale, expiresAt } from '../ttls';
 
@@ -94,6 +94,12 @@ export async function getFixturesByDate(
   if (cached) {
     const ageMs = Date.now() - new Date(cached.fetched_at).getTime();
     if (ageMs < TTL.RAW_DEFAULT) {
+      await logApiUsage({
+        provider: 'api-football',
+        endpoint: 'fixtures',
+        requestKey,
+        cacheHit: true,
+      });
       return { fixtures: (cached.response as { response: APIFootballFixture[] }).response, source: 'database' };
     }
   }
@@ -107,6 +113,12 @@ export async function getFixturesByDate(
     await new Promise((r) => setTimeout(r, 2000));
     const retryCached = await getRawCache('api-football', requestKey);
     if (retryCached) {
+      await logApiUsage({
+        provider: 'api-football',
+        endpoint: 'fixtures',
+        requestKey,
+        cacheHit: true,
+      });
       return { fixtures: (retryCached.response as { response: APIFootballFixture[] }).response, source: 'database' };
     }
     throw new Error('SYNC_IN_PROGRESS');
