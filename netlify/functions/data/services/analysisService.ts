@@ -56,10 +56,13 @@ export async function getOrRunAnalysis(
   try {
     const cached = await getAnalysisByHash(input.fixtureId, 'kimi-k3', inputHash);
     if (cached && cached.result) {
+      console.log(`[analysisService] CACHE HIT for fixture ${input.fixtureId}, hash ${inputHash.slice(0, 8)}`);
       return { result: cached.result, fromCache: true };
     }
-  } catch {
+    console.log(`[analysisService] CACHE MISS for fixture ${input.fixtureId}, hash ${inputHash.slice(0, 8)}`);
+  } catch (e) {
     // DB read failed
+    console.log(`[analysisService] Cache read error: ${e}`);
   }
 
   // 2. Run analysis
@@ -77,8 +80,10 @@ export async function getOrRunAnalysis(
       missingData: input.missingData,
       result,
     });
-  } catch {
+    console.log(`[analysisService] CACHE SAVE for fixture ${input.fixtureId}, hash ${inputHash.slice(0, 8)}`);
+  } catch (e) {
     // DB write failed, not critical
+    console.log(`[analysisService] Cache write error: ${e}`);
   }
 
   return { result, fromCache: false };

@@ -42,6 +42,7 @@ interface AnalysisResponse {
   model: string;
   analyzedAt: string;
   fixtureId: number;
+  fromCache: boolean;
 }
 
 function buildPrompt(data: AnalyzeRequest): string {
@@ -264,6 +265,7 @@ export default async function handler(req: Request): Promise<Response> {
       model: 'moonshotai/kimi-k3',
       analyzedAt: new Date().toISOString(),
       fixtureId: body.fixture.id,
+      fromCache,
     };
 
     return jsonResponse(response);
