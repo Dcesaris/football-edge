@@ -70,14 +70,14 @@ export default async function handler(req: Request): Promise<Response> {
 
       // Read from DB if stored
       if (statsOk.status === 'fulfilled' && statsOk.value) {
-        const { data: statsRows } = await supabase
-          .from('fixture_statistics')
-          .select('*')
-          .eq('fixture_id', fixtureDbId);
-        if (statsRows && statsRows.length > 0) {
-          statistics = statsRows.map((s) => ({
+        const statsResult = await supabaseSelect<{ raw_json: unknown }>('fixture_statistics', {
+          select: 'raw_json',
+          filters: { fixture_id: fixtureDbId },
+        });
+        if (statsResult.data && statsResult.data.length > 0) {
+          statistics = statsResult.data.map((s) => ({
             team: { id: 0, name: '', logo: '' },
-            statistics: s.raw_json || [],
+            statistics: (s.raw_json as Array<{ type: string; value: string | number | null }>) || [],
           })) as APIFootballStatistics[];
         }
       }
