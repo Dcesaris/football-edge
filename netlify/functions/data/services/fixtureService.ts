@@ -2,7 +2,7 @@ import type { APIFootballFixture } from '../../types';
 import { upsertLeague } from '../repositories/leagueRepository';
 import { upsertTeam } from '../repositories/teamRepository';
 import { upsertFixture, getFixtureByApiId, updateFixtureStatus, getFixturesByDate as dbGetFixturesByDate, getLiveFixtures as dbGetLiveFixtures } from '../repositories/fixtureRepository';
-import { acquireSyncLock, releaseSyncLock } from '../repositories/cacheRepository';
+import { acquireSyncLock, releaseSyncLock, getRawCache } from '../repositories/cacheRepository';
 import { apiFootballFetch } from '../providers/apiFootball';
 import { TTL, getFixtureTTL, isStale, expiresAt } from '../ttls';
 
