@@ -7,6 +7,10 @@ import type {
 } from './types';
 import { apiFootballFetch, jsonResponse, errorResponse, handleCORS } from './utils';
 
+interface APIFootballFixturesResponse {
+  response: APIFootballFixture[];
+}
+
 interface FixtureDetailResponse {
   fixture: APIFootballFixture;
   statistics: APIFootballStatistics[];
@@ -37,8 +41,8 @@ export default async function handler(req: Request): Promise<Response> {
   const isLive = url.searchParams.get('live') === 'true';
 
   try {
-    // Fetch fixture details
-    const { data: fixtureData } = await apiFootballFetch<{ fixture: APIFootballFixture }[]>(
+    // 1 call: /fixtures?id=FIXTURE_ID (may include embedded statistics, lineups, players)
+    const { data: fixtureData } = await apiFootballFetch<APIFootballFixturesResponse>(
       'fixtures',
       { id: fixtureId },
       apiKey,
@@ -51,92 +55,94 @@ export default async function handler(req: Request): Promise<Response> {
 
     const fixture = fixtureData.response[0];
 
-    // Fetch statistics
+    // Extract embedded data if present in the response
     let statistics: APIFootballStatistics[] = [];
-    try {
-      const { data: statsData } = await apiFootballFetch<APIFootballStatistics[]>(
-        'fixtures/statistics',
-        { fixture: fixtureId },
-        apiKey,
-        isLive,
-      );
-      statistics = statsData.response;
-    } catch {
-      // Statistics might not be available yet
-    }
-
-    // Fetch lineups
     let lineups: APIFootballLineup[] = [];
-    try {
-      const { data: lineupData } = await apiFootballFetch<APIFootballLineup[]>(
-        'fixtures/lineups',
-        { fixture: fixtureId },
-        apiKey,
-        isLive,
-      );
-      lineups = lineupData.response;
-    } catch {
-      // Lineups might not be available yet
-    }
-
-    // Fetch players
     let players: APIFootballPlayer[] = [];
-    try {
-      const { data: playerData } = await apiFootballFetch<APIFootballPlayer[]>(
-        'fixtures/players',
-        { fixture: fixtureId },
-        apiKey,
-        isLive,
-      );
-      players = playerData.response;
-    } catch {
-      // Players might not be available yet
+
+    // Check if /fixtures?id returned embedded data (API v3 can embed these)
+    const fixtureAny = fixture as Record<string, unknown>;
+    if (Array.isArray(fixtureAny.statistics) && fixtureAny.statistics.length > 0) {
+      statistics = fixtureAny.statistics as APIFootballStatistics[];
+    }
+    if (Array.isArray(fixtureAny.lineups) && fixtureAny.lineups.length > 0) {
+      lineups = fixtureAny.lineups as APIFootballLineup[];
+    }
+    if (Array.isArray(fixtureAny.players) && fixtureAny.players.length > 0) {
+      players = fixtureAny.players as APIFootballPlayer[];
     }
 
-    // Fetch H2H
-    let h2h: APIFootballH2H[] = [];
-    try {
-      const homeId = fixture.teams.home.id.toString();
-      const awayId = fixture.teams.away.id.toString();
-      const { data: h2hData } = await apiFootballFetch<APIFootballH2H[]>(
+    // Only fetch missing data via separate endpoints
+    if (statistics.length === 0) {
+      try {
+        const { data: statsData } = await apiFootballFetch<APIFootballStatistics[]>(
+          'fixtures/statistics',
+          { fixture: fixtureId },
+          apiKey,
+          isLive,
+        );
+        statistics = statsData.response;
+      } catch {
+        // Statistics might not be available yet
+      }
+    }
+
+    if (lineups.length === 0) {
+      try {
+        const { data: lineupData } = await apiFootballFetch<APIFootballLineup[]>(
+          'fixtures/lineups',
+          { fixture: fixtureId },
+          apiKey,
+          isLive,
+        );
+        lineups = lineupData.response;
+      } catch {
+        // Lineups might not be available yet
+      }
+    }
+
+    if (players.length === 0) {
+      try {
+        const { data: playerData } = await apiFootballFetch<APIFootballPlayer[]>(
+          'fixtures/players',
+          { fixture: fixtureId },
+          apiKey,
+          isLive,
+        );
+        players = playerData.response;
+      } catch {
+        // Players might not be available yet
+      }
+    }
+
+    // Parallel calls: H2H, predictions, odds (always separate endpoints)
+    const homeId = fixture.teams.home.id.toString();
+    const awayId = fixture.teams.away.id.toString();
+
+    const [h2hResult, predictionsResult, oddsResult] = await Promise.allSettled([
+      apiFootballFetch<APIFootballH2H[]>(
         'fixtures/headtohead',
         { h2h: `${homeId}-${awayId}`, last: '5' },
         apiKey,
         false,
-      );
-      h2h = h2hData.response;
-    } catch {
-      // H2H might not be available
-    }
-
-    // Fetch predictions (endpoint: predictions?fixture=ID)
-    let predictions: unknown = null;
-    try {
-      const { data: predData } = await apiFootballFetch<unknown[]>(
+      ),
+      apiFootballFetch<unknown[]>(
         'predictions',
         { fixture: fixtureId },
         apiKey,
         false,
-      );
-      predictions = predData.response;
-    } catch {
-      // Predictions might not be available
-    }
-
-    // Fetch odds (pre-match: odds?fixture=ID, live: odds/live?fixture=ID)
-    let odds: unknown = null;
-    try {
-      const oddsEndpoint = isLive ? 'odds/live' : 'odds';
-      const { data: oddsData } = await apiFootballFetch<unknown[]>(
-        oddsEndpoint,
+      ),
+      apiFootballFetch<unknown[]>(
+        isLive ? 'odds/live' : 'odds',
         { fixture: fixtureId },
         apiKey,
         isLive,
-      );
-      odds = oddsData.response;
-    } catch {
-      // Odds might not be available
-    }
+      ),
+    ]);
+
+    const h2h = h2hResult.status === 'fulfilled' ? h2hResult.value.data.response : [];
+    const predictions = predictionsResult.status === 'fulfilled' ? predictionsResult.value.data.response : null;
+    const odds = oddsResult.status === 'fulfilled' ? oddsResult.value.data.response : null;
 
     return jsonResponse({
       fixture,

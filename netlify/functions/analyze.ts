@@ -156,8 +156,7 @@ export default async function handler(req: Request): Promise<Response> {
           content: prompt,
         },
       ],
-      temperature: 0.3,
-      top_p: 0.9,
+      temperature: 1.0,
       max_tokens: 4096,
       reasoning_effort: getReasoningEffort(body.reasoning),
     };
