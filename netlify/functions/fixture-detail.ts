@@ -109,11 +109,11 @@ export default async function handler(req: Request): Promise<Response> {
       // H2H might not be available
     }
 
-    // Fetch predictions
+    // Fetch predictions (endpoint: predictions?fixture=ID)
     let predictions: unknown = null;
     try {
       const { data: predData } = await apiFootballFetch<unknown[]>(
-        'fixtures/predictions',
+        'predictions',
         { fixture: fixtureId },
         apiKey,
         false,
@@ -123,14 +123,15 @@ export default async function handler(req: Request): Promise<Response> {
       // Predictions might not be available
     }
 
-    // Fetch odds
+    // Fetch odds (pre-match: odds?fixture=ID, live: odds/live?fixture=ID)
     let odds: unknown = null;
     try {
+      const oddsEndpoint = isLive ? 'odds/live' : 'odds';
       const { data: oddsData } = await apiFootballFetch<unknown[]>(
-        'fixtures/odds',
+        oddsEndpoint,
         { fixture: fixtureId },
         apiKey,
-        false,
+        isLive,
       );
       odds = oddsData.response;
     } catch {

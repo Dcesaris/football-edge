@@ -111,9 +111,9 @@ Return ONLY the JSON array, no other text.`;
 function getReasoningEffort(reasoning: string): string {
   switch (reasoning) {
     case 'fast': return 'low';
-    case 'high': return 'medium';
-    case 'maximum': return 'high';
-    default: return 'medium';
+    case 'high': return 'high';
+    case 'maximum': return 'max';
+    default: return 'low';
   }
 }
 
@@ -144,81 +144,130 @@ export default async function handler(req: Request): Promise<Response> {
 
   try {
     const prompt = buildPrompt(body);
+    const payload = {
+      model: 'moonshotai/kimi-k3',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a precise football betting analyst. Always respond with valid JSON only.',
+        },
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+      temperature: 0.3,
+      top_p: 0.9,
+      max_tokens: 4096,
+      reasoning_effort: getReasoningEffort(body.reasoning),
+    };
 
+    // Step 1: Send initial request
     const nimResponse = await fetch(`${NIM_BASE}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({
-        model: 'moonshotai/kimi-k3',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a precise football betting analyst. Always respond with valid JSON only.',
-          },
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-        temperature: 0.3,
-        top_p: 0.9,
-        max_tokens: 4096,
-        reasoning_effort: getReasoningEffort(body.reasoning),
-      }),
+      body: JSON.stringify(payload),
     });
 
-    if (!nimResponse.ok) {
-      const errorText = await nimResponse.text();
-      console.error('NIM API error:', errorText);
-      return errorResponse('AI analysis failed', 502);
-    }
-
-    const nimData = await nimResponse.json();
-    const content = nimData.choices?.[0]?.message?.content;
-
-    if (!content) {
-      return errorResponse('No response from AI', 502);
-    }
-
-    // Parse JSON from response (handle markdown code blocks)
-    let entries: AnalysisEntry[];
-    try {
-      const jsonMatch = content.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        entries = JSON.parse(jsonMatch[0]);
-      } else {
-        entries = JSON.parse(content);
+    // Handle immediate 200 response
+    if (nimResponse.status === 200) {
+      const nimData = await nimResponse.json();
+      const content = nimData.choices?.[0]?.message?.content;
+      if (!content) {
+        return errorResponse('No response from AI', 502);
       }
-    } catch {
-      return errorResponse('Failed to parse AI response', 502);
+      return parseAndReturn(content, body.fixture.id);
     }
 
-    // Validate and sanitize entries
-    const validEntries = entries
-      .filter((e) => e && typeof e.market === 'string' && typeof e.currentOdd === 'number')
-      .slice(0, 3)
-      .map((e) => ({
-        ...e,
-        estimatedProbability: Math.min(1, Math.max(0, e.estimatedProbability || 0)),
-        edge: Math.round((e.edge || 0) * 10) / 10,
-        confidence: Math.min(100, Math.max(0, e.confidence || 0)),
-        decision: ['ENTER', 'WATCH', 'NO_BET'].includes(e.decision) ? e.decision : 'NO_BET',
-        risk: ['low', 'moderate', 'high'].includes(e.risk) ? e.risk : 'moderate',
-      }));
+    // Handle 202 Accepted (async processing)
+    if (nimResponse.status === 202) {
+      const asyncData = await nimResponse.json();
+      const requestId = asyncData.id || asyncData.request_id;
+      if (!requestId) {
+        return errorResponse('No requestId in 202 response', 502);
+      }
 
-    const response: AnalysisResponse = {
-      entries: validEntries,
-      model: 'moonshotai/kimi-k3',
-      analyzedAt: new Date().toISOString(),
-      fixtureId: body.fixture.id,
-    };
+      // Poll status endpoint with controlled timeout
+      const MAX_POLL_ATTEMPTS = 15;
+      const POLL_INTERVAL_MS = 2000;
 
-    return jsonResponse(response);
+      for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+
+        const statusResponse = await fetch(`${NIM_BASE}/status/${requestId}`, {
+          headers: { Authorization: `Bearer ${apiKey}` },
+        });
+
+        if (statusResponse.status === 200) {
+          const statusData = await statusResponse.json();
+          const content = statusData.choices?.[0]?.message?.content;
+          if (!content) {
+            return errorResponse('No content in completed status', 502);
+          }
+          return parseAndReturn(content, body.fixture.id);
+        }
+
+        if (statusResponse.status === 422) {
+          const errText = await statusResponse.text();
+          console.error('NIM status 422:', errText);
+          return errorResponse('AI processing failed (422)', 502);
+        }
+
+        if (statusResponse.status === 500) {
+          return errorResponse('AI server error (500)', 502);
+        }
+
+        // 202 = still processing, continue polling
+      }
+
+      // Timeout exceeded
+      return errorResponse('AI analysis timed out. Try again later.', 504);
+    }
+
+    // Handle other error codes
+    const errorText = await nimResponse.text();
+    console.error('NIM API error:', nimResponse.status, errorText);
+    return errorResponse(`AI analysis failed (${nimResponse.status})`, 502);
   } catch (error) {
     console.error('Analysis error:', error);
     return errorResponse('Analysis failed', 500);
   }
+}
+
+function parseAndReturn(content: string, fixtureId: number): Response {
+  let entries: AnalysisEntry[];
+  try {
+    const jsonMatch = content.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      entries = JSON.parse(jsonMatch[0]);
+    } else {
+      entries = JSON.parse(content);
+    }
+  } catch {
+    return errorResponse('Failed to parse AI response', 502);
+  }
+
+  const validEntries = entries
+    .filter((e) => e && typeof e.market === 'string' && typeof e.currentOdd === 'number')
+    .slice(0, 3)
+    .map((e) => ({
+      ...e,
+      estimatedProbability: Math.min(1, Math.max(0, e.estimatedProbability || 0)),
+      edge: Math.round((e.edge || 0) * 10) / 10,
+      confidence: Math.min(100, Math.max(0, e.confidence || 0)),
+      decision: ['ENTER', 'WATCH', 'NO_BET'].includes(e.decision) ? e.decision : 'NO_BET',
+      risk: ['low', 'moderate', 'high'].includes(e.risk) ? e.risk : 'moderate',
+    }));
+
+  const response: AnalysisResponse = {
+    entries: validEntries,
+    model: 'moonshotai/kimi-k3',
+    analyzedAt: new Date().toISOString(),
+    fixtureId,
+  };
+
+  return jsonResponse(response);
 }
