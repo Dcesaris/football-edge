@@ -1,4 +1,4 @@
-import { getSupabase } from '../supabase';
+import { supabaseSelect, supabaseInsert } from '../supabase';
 
 export interface OddsSnapshotRow {
   id: number;
@@ -27,7 +27,6 @@ export async function insertOddsSnapshots(
   }>,
   isLive = false,
 ): Promise<number> {
-  const supabase = getSupabase();
   const rows = oddsData.map((o) => ({
     fixture_id: fixtureId,
     bookmaker_id: o.bookmakerId ?? null,
@@ -40,53 +39,46 @@ export async function insertOddsSnapshots(
     is_live: isLive,
   }));
 
-  const { data, error } = await supabase
-    .from('odds_snapshots')
-    .insert(rows)
-    .select('id');
-
-  if (error) throw new Error(`DB insert odds: ${error.message}`);
-  return data?.length || 0;
+  const result = await supabaseInsert('odds_snapshots', rows);
+  if (result.error) throw new Error(`DB insert odds: ${result.error.message}`);
+  return result.data?.length || 0;
 }
 
 export async function getLatestOdds(fixtureId: number): Promise<OddsSnapshotRow[]> {
-  const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from('odds_snapshots')
-    .select('*')
-    .eq('fixture_id', fixtureId)
-    .order('captured_at', { ascending: false });
+  const result = await supabaseSelect<OddsSnapshotRow>('odds_snapshots', {
+    select: '*',
+    filters: { fixture_id: fixtureId },
+    order: { column: 'captured_at', ascending: false },
+  });
 
-  if (error) throw new Error(`DB get odds: ${error.message}`);
-  return data || [];
+  if (result.error) throw new Error(`DB get odds: ${result.error.message}`);
+  return result.data || [];
 }
 
 export async function getOddsHistory(fixtureId: number, marketName?: string): Promise<OddsSnapshotRow[]> {
-  const supabase = getSupabase();
-  let query = supabase
-    .from('odds_snapshots')
-    .select('*')
-    .eq('fixture_id', fixtureId)
-    .order('captured_at', { ascending: true });
+  const filters: Record<string, unknown> = { fixture_id: fixtureId };
+  if (marketName) filters.market_name = marketName;
 
-  if (marketName) {
-    query = query.eq('market_name', marketName);
-  }
+  const result = await supabaseSelect<OddsSnapshotRow>('odds_snapshots', {
+    select: '*',
+    filters,
+    order: { column: 'captured_at', ascending: true },
+  });
 
-  const { data, error } = await query;
-  if (error) throw new Error(`DB get odds history: ${error.message}`);
-  return data || [];
+  if (result.error) throw new Error(`DB get odds history: ${result.error.message}`);
+  return result.data || [];
 }
 
 export async function hasRecentOdds(fixtureId: number, withinMs: number): Promise<boolean> {
-  const supabase = getSupabase();
   const since = new Date(Date.now() - withinMs).toISOString();
-  const { count, error } = await supabase
-    .from('odds_snapshots')
-    .select('*', { count: 'exact', head: true })
-    .eq('fixture_id', fixtureId)
-    .gte('captured_at', since);
+  const result = await supabaseSelect('odds_snapshots', {
+    select: 'id',
+    filters: { fixture_id: fixtureId, captured_at: { gte: since } },
+    limit: 1,
+    count: 'exact',
+    head: true,
+  });
 
-  if (error) throw new Error(`DB check odds: ${error.message}`);
-  return (count || 0) > 0;
+  if (result.error) throw new Error(`DB check odds: ${result.error.message}`);
+  return (result.count || 0) > 0;
 }

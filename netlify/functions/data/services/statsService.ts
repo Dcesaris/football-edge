@@ -1,4 +1,4 @@
-import { getSupabase } from '../supabase';
+import { supabaseSelect, supabaseUpsert, supabaseInsert, supabaseDelete } from '../supabase';
 import { apiFootballFetch } from '../providers/apiFootball';
 import { acquireSyncLock, releaseSyncLock } from '../repositories/cacheRepository';
 import { TTL } from '../ttls';
@@ -17,15 +17,16 @@ export async function fetchAndStoreStatistics(
   fixtureApiId: number,
   apiKey: string,
 ): Promise<boolean> {
-  const supabase = getSupabase();
-
   // Check if already stored
-  const { count } = await supabase
-    .from('fixture_statistics')
-    .select('*', { count: 'exact', head: true })
-    .eq('fixture_id', fixtureDbId);
+  const existing = await supabaseSelect('fixture_statistics', {
+    select: 'id',
+    filters: { fixture_id: fixtureDbId },
+    limit: 1,
+    count: 'exact',
+    head: true,
+  });
 
-  if (count && count > 0) return true;
+  if (existing.count && existing.count > 0) return true;
 
   const lockKey = `fixture:${fixtureApiId}:stats`;
   const gotLock = await acquireSyncLock(lockKey, TTL.SYNC_LOCK);
@@ -47,34 +48,32 @@ export async function fetchAndStoreStatistics(
         return isNaN(num) ? null : num;
       };
 
-      // Get or create team
-      const { data: team } = await supabase
-        .from('teams')
-        .select('id')
-        .eq('api_id', teamStats.team.id)
-        .single();
+      // Get team
+      const teamResult = await supabaseSelect<{ id: number }>('teams', {
+        select: 'id',
+        filters: { api_id: teamStats.team.id },
+        limit: 1,
+      });
+      if (!teamResult.data || teamResult.data.length === 0) continue;
+      const teamId = teamResult.data[0].id;
 
-      if (!team) continue;
-
-      await supabase
-        .from('fixture_statistics')
-        .upsert({
-          fixture_id: fixtureDbId,
-          team_id: team.id,
-          possession: find('Ball Possession') ? parseInt(String(find('Ball Possession'))) : null,
-          total_shots: find('Total Shots'),
-          shots_on_goal: find('Shots on Goal'),
-          shots_off_goal: find('Shots off Goal'),
-          blocked_shots: find('Blocked Shots'),
-          corner_kicks: find('Corner Kicks'),
-          fouls: find('Fouls'),
-          offsides: find('Offsides'),
-          yellow_cards: find('Yellow Cards'),
-          red_cards: find('Red Cards'),
-          goalkeeper_saves: find('Goalkeeper Saves'),
-          expected_goals: find('Expected Goals') ? Number(find('Expected Goals')) : null,
-          raw_json: stats,
-        }, { onConflict: 'fixture_id,team_id' });
+      await supabaseUpsert('fixture_statistics', {
+        fixture_id: fixtureDbId,
+        team_id: teamId,
+        possession: find('Ball Possession') ? parseInt(String(find('Ball Possession'))) : null,
+        total_shots: find('Total Shots'),
+        shots_on_goal: find('Shots on Goal'),
+        shots_off_goal: find('Shots off Goal'),
+        blocked_shots: find('Blocked Shots'),
+        corner_kicks: find('Corner Kicks'),
+        fouls: find('Fouls'),
+        offsides: find('Offsides'),
+        yellow_cards: find('Yellow Cards'),
+        red_cards: find('Red Cards'),
+        goalkeeper_saves: find('Goalkeeper Saves'),
+        expected_goals: find('Expected Goals') ? Number(find('Expected Goals')) : null,
+        raw_json: stats,
+      }, { onConflict: 'fixture_id,team_id' });
     }
 
     return true;
@@ -105,14 +104,15 @@ export async function fetchAndStoreLineups(
   fixtureApiId: number,
   apiKey: string,
 ): Promise<boolean> {
-  const supabase = getSupabase();
+  const existing = await supabaseSelect('lineups', {
+    select: 'id',
+    filters: { fixture_id: fixtureDbId },
+    limit: 1,
+    count: 'exact',
+    head: true,
+  });
 
-  const { count } = await supabase
-    .from('lineups')
-    .select('*', { count: 'exact', head: true })
-    .eq('fixture_id', fixtureDbId);
-
-  if (count && count > 0) return true;
+  if (existing.count && existing.count > 0) return true;
 
   const lockKey = `fixture:${fixtureApiId}:lineups`;
   const gotLock = await acquireSyncLock(lockKey, TTL.SYNC_LOCK);
@@ -126,30 +126,31 @@ export async function fetchAndStoreLineups(
     );
 
     for (const lineup of data.response) {
-      const { data: team } = await supabase
-        .from('teams')
-        .select('id')
-        .eq('api_id', lineup.team.id)
-        .single();
+      const teamResult = await supabaseSelect<{ id: number }>('teams', {
+        select: 'id',
+        filters: { api_id: lineup.team.id },
+        limit: 1,
+      });
+      if (!teamResult.data || teamResult.data.length === 0) continue;
+      const teamId = teamResult.data[0].id;
 
-      if (!team) continue;
+      const lineupResult = await supabaseUpsert<{ id: number }>('lineups', {
+        fixture_id: fixtureDbId,
+        team_id: teamId,
+        formation: lineup.formation,
+        confirmed: true,
+        raw_json: lineup,
+      }, { onConflict: 'fixture_id,team_id', select: 'id' });
 
-      const { data: lineupRow } = await supabase
-        .from('lineups')
-        .upsert({
-          fixture_id: fixtureDbId,
-          team_id: team.id,
-          formation: lineup.formation,
-          confirmed: true,
-          raw_json: lineup,
-        }, { onConflict: 'fixture_id,team_id' })
-        .select()
-        .single();
+      if (lineupResult.data && lineupResult.data.length > 0) {
+        const lineupId = lineupResult.data[0].id;
 
-      if (lineupRow) {
-        // Insert lineup players
+        // Delete existing lineup players
+        await supabaseDelete('lineup_players', { lineup_id: lineupId });
+
+        // Insert new ones
         const players = lineup.startXI.map((p) => ({
-          lineup_id: lineupRow.id,
+          lineup_id: lineupId,
           player_id: null as number | null,
           starter: true,
           position: p.player.pos,
@@ -158,18 +159,22 @@ export async function fetchAndStoreLineups(
         }));
 
         // Resolve player IDs
-        for (const p of players) {
-          const { data: player } = await supabase
-            .from('players')
-            .select('id')
-            .eq('api_id', lineup.startXI[players.indexOf(p)]?.player.id || 0)
-            .single();
-          if (player) p.player_id = player.id;
+        for (let i = 0; i < players.length; i++) {
+          const apiPlayerId = lineup.startXI[i]?.player.id;
+          if (apiPlayerId) {
+            const playerResult = await supabaseSelect<{ id: number }>('players', {
+              select: 'id',
+              filters: { api_id: apiPlayerId },
+              limit: 1,
+            });
+            if (playerResult.data && playerResult.data.length > 0) {
+              players[i].player_id = playerResult.data[0].id;
+            }
+          }
         }
 
-        await supabase.from('lineup_players').delete().eq('lineup_id', lineupRow.id);
         if (players.length > 0) {
-          await supabase.from('lineup_players').insert(players);
+          await supabaseInsert('lineup_players', players);
         }
       }
     }
@@ -187,26 +192,29 @@ export async function fetchAndStoreLineups(
 // ============================================================
 
 interface ApiPlayer {
-  player: {
-    id: number;
-    name: string;
-    photo: string;
-    position: string;
-    rating: number | null;
-    captain: boolean;
-    substitute: boolean;
-    statistics: {
-      games: { minutes: number; position: string; rating: number | null; captain: boolean };
-      shots: { total: number | null; on: number | null };
-      goals: { total: number | null; conceded: number | null; assists: number | null };
-      passes: { total: number | null; key: number | null; accuracy: number | null };
-      tackles: { total: number | null; blocks: number | null; interceptions: number | null };
-      duels: { total: number | null; won: number | null };
-      fouls: { drawn: number | null; committed: number | null };
-      cards: { yellow: number | null; red: number | null };
-      penalty: { won: number | null; scored: number | null; missed: number | null };
+  team: { id: number };
+  players: Array<{
+    player: {
+      id: number;
+      name: string;
+      photo: string;
+      position: string;
+      rating: number | null;
+      captain: boolean;
+      substitute: boolean;
+      statistics: {
+        games: { minutes: number; position: string; rating: number | null; captain: boolean };
+        shots: { total: number | null; on: number | null };
+        goals: { total: number | null; conceded: number | null; assists: number | null };
+        passes: { total: number | null; key: number | null; accuracy: number | null };
+        tackles: { total: number | null; blocks: number | null; interceptions: number | null };
+        duels: { total: number | null; won: number | null };
+        fouls: { drawn: number | null; committed: number | null };
+        cards: { yellow: number | null; red: number | null };
+        penalty: { won: number | null; scored: number | null; missed: number | null };
+      };
     };
-  }[];
+  }>;
 }
 
 export async function fetchAndStorePlayers(
@@ -214,14 +222,15 @@ export async function fetchAndStorePlayers(
   fixtureApiId: number,
   apiKey: string,
 ): Promise<boolean> {
-  const supabase = getSupabase();
+  const existing = await supabaseSelect('fixture_players', {
+    select: 'id',
+    filters: { fixture_id: fixtureDbId },
+    limit: 1,
+    count: 'exact',
+    head: true,
+  });
 
-  const { count } = await supabase
-    .from('fixture_players')
-    .select('*', { count: 'exact', head: true })
-    .eq('fixture_id', fixtureDbId);
-
-  if (count && count > 0) return true;
+  if (existing.count && existing.count > 0) return true;
 
   const lockKey = `fixture:${fixtureApiId}:players`;
   const gotLock = await acquireSyncLock(lockKey, TTL.SYNC_LOCK);
@@ -235,53 +244,48 @@ export async function fetchAndStorePlayers(
     );
 
     for (const teamPlayers of data.response) {
-      // Get team
-      const { data: team } = await supabase
-        .from('teams')
-        .select('id')
-        .eq('api_id', teamPlayers.team.id)
-        .single();
-      if (!team) continue;
+      const teamResult = await supabaseSelect<{ id: number }>('teams', {
+        select: 'id',
+        filters: { api_id: teamPlayers.team.id },
+        limit: 1,
+      });
+      if (!teamResult.data || teamResult.data.length === 0) continue;
+      const teamId = teamResult.data[0].id;
 
       for (const p of teamPlayers.players) {
         // Upsert player
-        const { data: playerRow } = await supabase
-          .from('players')
-          .upsert({
-            api_id: p.player.id,
-            name: p.player.name,
-            photo: p.player.photo,
-          }, { onConflict: 'api_id' })
-          .select()
-          .single();
+        const playerResult = await supabaseUpsert<{ id: number }>('players', {
+          api_id: p.player.id,
+          name: p.player.name,
+          photo: p.player.photo,
+        }, { onConflict: 'api_id', select: 'id' });
 
-        if (!playerRow) continue;
+        if (!playerResult.data || playerResult.data.length === 0) continue;
+        const playerId = playerResult.data[0].id;
 
         const stats = p.player.statistics;
-        await supabase
-          .from('fixture_players')
-          .upsert({
-            fixture_id: fixtureDbId,
-            team_id: team.id,
-            player_id: playerRow.id,
-            starter: !p.player.substitute,
-            substitute: p.player.substitute,
-            position: p.player.position,
-            minutes: stats.games.minutes,
-            rating: stats.games.rating,
-            captain: stats.games.captain,
-            shots: stats.shots.total,
-            shots_on_target: stats.shots.on,
-            goals: stats.goals.total,
-            assists: stats.goals.assists,
-            passes: stats.passes.total,
-            tackles: stats.tackles.total,
-            fouls_committed: stats.fouls.committed,
-            fouls_drawn: stats.fouls.drawn,
-            yellow_cards: stats.cards.yellow,
-            red_cards: stats.cards.red,
-            raw_json: p.player,
-          }, { onConflict: 'fixture_id,player_id' });
+        await supabaseUpsert('fixture_players', {
+          fixture_id: fixtureDbId,
+          team_id: teamId,
+          player_id: playerId,
+          starter: !p.player.substitute,
+          substitute: p.player.substitute,
+          position: p.player.position,
+          minutes: stats.games.minutes,
+          rating: stats.games.rating,
+          captain: stats.games.captain,
+          shots: stats.shots.total,
+          shots_on_target: stats.shots.on,
+          goals: stats.goals.total,
+          assists: stats.goals.assists,
+          passes: stats.passes.total,
+          tackles: stats.tackles.total,
+          fouls_committed: stats.fouls.committed,
+          fouls_drawn: stats.fouls.drawn,
+          yellow_cards: stats.cards.yellow,
+          red_cards: stats.cards.red,
+          raw_json: p.player,
+        }, { onConflict: 'fixture_id,player_id' });
       }
     }
 

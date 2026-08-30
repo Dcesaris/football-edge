@@ -1,4 +1,4 @@
-import { getSupabase } from '../supabase';
+import { supabaseSelect, supabaseUpsert } from '../supabase';
 
 export interface TeamRow {
   id: number;
@@ -12,33 +12,27 @@ export interface TeamRow {
 }
 
 export async function upsertTeam(data: { apiId: number; name: string; code?: string; country?: string; logo?: string }): Promise<TeamRow> {
-  const supabase = getSupabase();
-  const { data: row, error } = await supabase
-    .from('teams')
-    .upsert({
-      api_id: data.apiId,
-      name: data.name,
-      code: data.code || null,
-      country: data.country || null,
-      logo: data.logo || null,
-    }, { onConflict: 'api_id' })
-    .select()
-    .single();
+  const result = await supabaseUpsert<TeamRow>('teams', {
+    api_id: data.apiId,
+    name: data.name,
+    code: data.code || null,
+    country: data.country || null,
+    logo: data.logo || null,
+  }, { onConflict: 'api_id', select: '*' });
 
-  if (error) throw new Error(`DB upsert team: ${error.message}`);
-  return row;
+  if (result.error) throw new Error(`DB upsert team: ${result.error.message}`);
+  return result.data![0];
 }
 
 export async function getTeamByApiId(apiId: number): Promise<TeamRow | null> {
-  const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from('teams')
-    .select('*')
-    .eq('api_id', apiId)
-    .single();
+  const result = await supabaseSelect<TeamRow>('teams', {
+    select: '*',
+    filters: { api_id: apiId },
+    limit: 1,
+  });
 
-  if (error && error.code !== 'PGRST116') throw new Error(`DB get team: ${error.message}`);
-  return data;
+  if (result.error) throw new Error(`DB get team: ${result.error.message}`);
+  return result.data?.[0] || null;
 }
 
 export async function upsertTeams(teams: Array<{ apiId: number; name: string; code?: string; country?: string; logo?: string }>): Promise<TeamRow[]> {

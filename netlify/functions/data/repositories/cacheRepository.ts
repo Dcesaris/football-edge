@@ -1,4 +1,4 @@
-import { getSupabase } from '../supabase';
+import { supabaseSelect, supabaseUpsert, supabaseInsert, supabaseDelete } from '../supabase';
 
 // ============================================================
 // RAW API CACHE
@@ -20,16 +20,14 @@ export async function getRawCache(
   provider: string,
   requestKey: string,
 ): Promise<RawCacheRow | null> {
-  const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from('api_raw_cache')
-    .select('*')
-    .eq('provider', provider)
-    .eq('request_key', requestKey)
-    .single();
+  const result = await supabaseSelect<RawCacheRow>('api_raw_cache', {
+    select: '*',
+    filters: { provider, request_key: requestKey },
+    limit: 1,
+  });
 
-  if (error && error.code !== 'PGRST116') throw new Error(`DB get raw cache: ${error.message}`);
-  return data;
+  if (result.error) throw new Error(`DB get raw cache: ${result.error.message}`);
+  return result.data?.[0] || null;
 }
 
 export async function setRawCache(
@@ -41,35 +39,29 @@ export async function setRawCache(
   ttlMs: number,
   fixtureId?: number,
 ): Promise<void> {
-  const supabase = getSupabase();
   const expiresAt = new Date(Date.now() + ttlMs).toISOString();
+  const result = await supabaseUpsert('api_raw_cache', {
+    provider,
+    endpoint,
+    request_key: requestKey,
+    fixture_id: fixtureId || null,
+    response,
+    http_status: httpStatus,
+    fetched_at: new Date().toISOString(),
+    expires_at: expiresAt,
+  }, { onConflict: 'provider,request_key' });
 
-  const { error } = await supabase
-    .from('api_raw_cache')
-    .upsert({
-      provider,
-      endpoint,
-      request_key: requestKey,
-      fixture_id: fixtureId || null,
-      response,
-      http_status: httpStatus,
-      fetched_at: new Date().toISOString(),
-      expires_at: expiresAt,
-    }, { onConflict: 'provider,request_key' });
-
-  if (error) throw new Error(`DB set raw cache: ${error.message}`);
+  if (result.error) throw new Error(`DB set raw cache: ${result.error.message}`);
 }
 
 export async function deleteExpiredRawCache(): Promise<number> {
-  const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from('api_raw_cache')
-    .delete()
-    .lt('expires_at', new Date().toISOString())
-    .select('id');
+  const now = new Date().toISOString();
+  const result = await supabaseDelete('api_raw_cache', {
+    expires_at: { lt: now },
+  });
 
-  if (error) throw new Error(`DB delete expired cache: ${error.message}`);
-  return data?.length || 0;
+  if (result.error) throw new Error(`DB delete expired cache: ${result.error.message}`);
+  return 0; // Delete doesn't return count in REST API
 }
 
 // ============================================================
@@ -80,48 +72,44 @@ export async function acquireSyncLock(
   resourceKey: string,
   lockDurationMs = 30000,
 ): Promise<boolean> {
-  const supabase = getSupabase();
   const now = new Date().toISOString();
   const expiresAt = new Date(Date.now() + lockDurationMs).toISOString();
 
-  // Try to insert or update
-  const { data: existing } = await supabase
-    .from('sync_locks')
-    .select('*')
-    .eq('resource_key', resourceKey)
-    .single();
+  // Check existing lock
+  const existing = await supabaseSelect('sync_locks', {
+    select: '*',
+    filters: { resource_key: resourceKey },
+    limit: 1,
+  });
 
-  if (existing) {
-    // Check if lock expired
-    if (new Date(existing.expires_at).getTime() > Date.now()) {
-      return false; // Lock held by another process
+  if (existing.data && existing.data.length > 0) {
+    const lock = existing.data[0] as { expires_at: string };
+    if (new Date(lock.expires_at).getTime() > Date.now()) {
+      return false; // Lock held
     }
-    // Lock expired, update it
-    const { error } = await supabase
-      .from('sync_locks')
-      .update({ locked_at: now, expires_at: expiresAt })
-      .eq('resource_key', resourceKey);
-    if (error) throw new Error(`DB update sync lock: ${error.message}`);
+    // Lock expired, update
+    const result = await supabaseUpsert('sync_locks', {
+      resource_key: resourceKey,
+      locked_at: now,
+      expires_at: expiresAt,
+    }, { onConflict: 'resource_key' });
+    if (result.error) throw new Error(`DB update sync lock: ${result.error.message}`);
     return true;
   }
 
   // Insert new lock
-  const { error } = await supabase
-    .from('sync_locks')
-    .insert({ resource_key: resourceKey, locked_at: now, expires_at: expiresAt });
-
-  if (error) throw new Error(`DB insert sync lock: ${error.message}`);
+  const result = await supabaseInsert('sync_locks', {
+    resource_key: resourceKey,
+    locked_at: now,
+    expires_at: expiresAt,
+  });
+  if (result.error) throw new Error(`DB insert sync lock: ${result.error.message}`);
   return true;
 }
 
 export async function releaseSyncLock(resourceKey: string): Promise<void> {
-  const supabase = getSupabase();
-  const { error } = await supabase
-    .from('sync_locks')
-    .delete()
-    .eq('resource_key', resourceKey);
-
-  if (error) throw new Error(`DB release sync lock: ${error.message}`);
+  const result = await supabaseDelete('sync_locks', { resource_key: resourceKey });
+  if (result.error) throw new Error(`DB release sync lock: ${result.error.message}`);
 }
 
 // ============================================================
@@ -138,21 +126,18 @@ export async function logApiUsage(data: {
   rateLimitRemaining?: number;
   durationMs?: number;
 }): Promise<void> {
-  const supabase = getSupabase();
-  const { error } = await supabase
-    .from('api_usage')
-    .insert({
-      provider: data.provider,
-      endpoint: data.endpoint,
-      request_key: data.requestKey || null,
-      status_code: data.statusCode || null,
-      cache_hit: data.cacheHit,
-      quota_remaining: data.quotaRemaining ?? null,
-      rate_limit_remaining: data.rateLimitRemaining ?? null,
-      duration_ms: data.durationMs ?? null,
-    });
+  const result = await supabaseInsert('api_usage', {
+    provider: data.provider,
+    endpoint: data.endpoint,
+    request_key: data.requestKey || null,
+    status_code: data.statusCode || null,
+    cache_hit: data.cacheHit,
+    quota_remaining: data.quotaRemaining ?? null,
+    rate_limit_remaining: data.rateLimitRemaining ?? null,
+    duration_ms: data.durationMs ?? null,
+  });
 
-  if (error) throw new Error(`DB log usage: ${error.message}`);
+  if (result.error) throw new Error(`DB log usage: ${result.error.message}`);
 }
 
 export async function getUsageStats(since?: Date): Promise<{
@@ -161,22 +146,27 @@ export async function getUsageStats(since?: Date): Promise<{
   cacheMisses: number;
   byProvider: Record<string, { requests: number; cacheHits: number }>;
 }> {
-  const supabase = getSupabase();
-  let query = supabase.from('api_usage').select('provider, cache_hit');
+  const filters: Record<string, unknown> = {};
   if (since) {
-    query = query.gte('requested_at', since.toISOString());
+    filters.requested_at = { gte: since.toISOString() };
   }
-  const { data, error } = await query;
-  if (error) throw new Error(`DB get usage: ${error.message}`);
 
+  const result = await supabaseSelect<{ provider: string; cache_hit: boolean }>('api_usage', {
+    select: 'provider,cache_hit',
+    filters,
+  });
+
+  if (result.error) throw new Error(`DB get usage: ${result.error.message}`);
+
+  const data = result.data || [];
   const stats = {
-    totalRequests: data?.length || 0,
-    cacheHits: data?.filter((r) => r.cache_hit).length || 0,
-    cacheMisses: data?.filter((r) => !r.cache_hit).length || 0,
+    totalRequests: data.length,
+    cacheHits: data.filter((r) => r.cache_hit).length,
+    cacheMisses: data.filter((r) => !r.cache_hit).length,
     byProvider: {} as Record<string, { requests: number; cacheHits: number }>,
   };
 
-  for (const row of data || []) {
+  for (const row of data) {
     if (!stats.byProvider[row.provider]) {
       stats.byProvider[row.provider] = { requests: 0, cacheHits: 0 };
     }

@@ -1,5 +1,5 @@
 import { jsonResponse, handleCORS } from './utils';
-import { getSupabase } from './data/supabase';
+import { supabaseHealthCheck } from './data/supabase';
 import { getUsageStats } from './data/repositories/cacheRepository';
 
 export default async function handler(req: Request): Promise<Response> {
@@ -17,12 +17,10 @@ export default async function handler(req: Request): Promise<Response> {
 
   if (supabaseConfigured) {
     try {
-      const supabase = getSupabase();
-      const { error } = await supabase.from('api_usage').select('id', { count: 'exact', head: true });
-      if (error) {
-        dbError = error.message;
+      dbConnected = await supabaseHealthCheck();
+      if (!dbConnected) {
+        dbError = 'Health check failed';
       } else {
-        dbConnected = true;
         usage = await getUsageStats(new Date(Date.now() - 24 * 60 * 60 * 1000));
       }
     } catch (err) {

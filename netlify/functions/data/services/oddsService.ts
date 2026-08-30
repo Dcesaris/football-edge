@@ -2,7 +2,6 @@ import { insertOddsSnapshots, getLatestOdds, hasRecentOdds } from '../repositori
 import { apiFootballFetch } from '../providers/apiFootball';
 import { acquireSyncLock, releaseSyncLock } from '../repositories/cacheRepository';
 import { TTL } from '../ttls';
-import { getSupabase } from '../supabase';
 
 export async function fetchAndStoreOdds(
   fixtureId: number,

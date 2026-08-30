@@ -10,7 +10,7 @@ import { getFixtureDetail } from './data/services/fixtureService';
 import { apiFootballFetch } from './data/providers/apiFootball';
 import { fetchAndStoreStatistics, fetchAndStoreLineups, fetchAndStorePlayers } from './data/services/statsService';
 import { fetchAndStoreOdds } from './data/services/oddsService';
-import { getSupabase } from './data/supabase';
+import { supabaseSelect } from './data/supabase';
 
 interface FixtureDetailResponse {
   fixture: APIFootballFixture;
@@ -48,14 +48,12 @@ export default async function handler(req: Request): Promise<Response> {
     const { fixture } = await getFixtureDetail(fixtureApiId, apiKey, isLive);
 
     // 2. Get DB fixture ID for relations
-    const supabase = getSupabase();
-    const { data: dbFixture } = await supabase
-      .from('fixtures')
-      .select('id')
-      .eq('api_id', fixtureApiId)
-      .single();
-
-    const fixtureDbId = dbFixture?.id;
+    const fixtureResult = await supabaseSelect<{ id: number }>('fixtures', {
+      select: 'id',
+      filters: { api_id: fixtureApiId },
+      limit: 1,
+    });
+    const fixtureDbId = fixtureResult.data?.[0]?.id;
 
     // 3. Fetch statistics, lineups, players in parallel (basic mode)
     let statistics: APIFootballStatistics[] = [];

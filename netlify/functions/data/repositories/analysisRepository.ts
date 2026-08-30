@@ -1,4 +1,4 @@
-import { getSupabase } from '../supabase';
+import { supabaseSelect, supabaseUpsert } from '../supabase';
 
 export interface AiAnalysisRow {
   id: number;
@@ -18,17 +18,14 @@ export async function getAnalysisByHash(
   model: string,
   inputHash: string,
 ): Promise<AiAnalysisRow | null> {
-  const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from('ai_analyses')
-    .select('*')
-    .eq('fixture_id', fixtureId)
-    .eq('model', model)
-    .eq('input_hash', inputHash)
-    .single();
+  const result = await supabaseSelect<AiAnalysisRow>('ai_analyses', {
+    select: '*',
+    filters: { fixture_id: fixtureId, model, input_hash: inputHash },
+    limit: 1,
+  });
 
-  if (error && error.code !== 'PGRST116') throw new Error(`DB get analysis: ${error.message}`);
-  return data;
+  if (result.error) throw new Error(`DB get analysis: ${result.error.message}`);
+  return result.data?.[0] || null;
 }
 
 export async function insertAnalysis(data: {
@@ -41,34 +38,28 @@ export async function insertAnalysis(data: {
   missingData?: string[];
   result: unknown;
 }): Promise<AiAnalysisRow> {
-  const supabase = getSupabase();
-  const { data: row, error } = await supabase
-    .from('ai_analyses')
-    .upsert({
-      fixture_id: data.fixtureId,
-      model: data.model,
-      profile: data.profile,
-      reasoning: data.reasoning,
-      input_hash: data.inputHash,
-      data_quality: data.dataQuality || null,
-      missing_data: data.missingData || null,
-      result: data.result,
-    }, { onConflict: 'fixture_id,model,input_hash' })
-    .select()
-    .single();
+  const result = await supabaseUpsert<AiAnalysisRow>('ai_analyses', {
+    fixture_id: data.fixtureId,
+    model: data.model,
+    profile: data.profile,
+    reasoning: data.reasoning,
+    input_hash: data.inputHash,
+    data_quality: data.dataQuality || null,
+    missing_data: data.missingData || null,
+    result: data.result,
+  }, { onConflict: 'fixture_id,model,input_hash', select: '*' });
 
-  if (error) throw new Error(`DB insert analysis: ${error.message}`);
-  return row;
+  if (result.error) throw new Error(`DB insert analysis: ${result.error.message}`);
+  return result.data![0];
 }
 
 export async function getAnalysesForFixture(fixtureId: number): Promise<AiAnalysisRow[]> {
-  const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from('ai_analyses')
-    .select('*')
-    .eq('fixture_id', fixtureId)
-    .order('created_at', { ascending: false });
+  const result = await supabaseSelect<AiAnalysisRow>('ai_analyses', {
+    select: '*',
+    filters: { fixture_id: fixtureId },
+    order: { column: 'created_at', ascending: false },
+  });
 
-  if (error) throw new Error(`DB get analyses: ${error.message}`);
-  return data || [];
+  if (result.error) throw new Error(`DB get analyses: ${result.error.message}`);
+  return result.data || [];
 }

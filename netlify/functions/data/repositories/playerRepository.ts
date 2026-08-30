@@ -1,4 +1,4 @@
-import { getSupabase } from '../supabase';
+import { supabaseSelect, supabaseUpsert } from '../supabase';
 
 export interface PlayerRow {
   id: number;
@@ -22,33 +22,27 @@ export async function upsertPlayer(data: {
   nationality?: string;
   photo?: string;
 }): Promise<PlayerRow> {
-  const supabase = getSupabase();
-  const { data: row, error } = await supabase
-    .from('players')
-    .upsert({
-      api_id: data.apiId,
-      name: data.name,
-      firstname: data.firstname || null,
-      lastname: data.lastname || null,
-      age: data.age || null,
-      nationality: data.nationality || null,
-      photo: data.photo || null,
-    }, { onConflict: 'api_id' })
-    .select()
-    .single();
+  const result = await supabaseUpsert<PlayerRow>('players', {
+    api_id: data.apiId,
+    name: data.name,
+    firstname: data.firstname || null,
+    lastname: data.lastname || null,
+    age: data.age || null,
+    nationality: data.nationality || null,
+    photo: data.photo || null,
+  }, { onConflict: 'api_id', select: '*' });
 
-  if (error) throw new Error(`DB upsert player: ${error.message}`);
-  return row;
+  if (result.error) throw new Error(`DB upsert player: ${result.error.message}`);
+  return result.data![0];
 }
 
 export async function getPlayerByApiId(apiId: number): Promise<PlayerRow | null> {
-  const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from('players')
-    .select('*')
-    .eq('api_id', apiId)
-    .single();
+  const result = await supabaseSelect<PlayerRow>('players', {
+    select: '*',
+    filters: { api_id: apiId },
+    limit: 1,
+  });
 
-  if (error && error.code !== 'PGRST116') throw new Error(`DB get player: ${error.message}`);
-  return data;
+  if (result.error) throw new Error(`DB get player: ${result.error.message}`);
+  return result.data?.[0] || null;
 }

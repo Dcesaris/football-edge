@@ -1,4 +1,4 @@
-import { getSupabase } from '../supabase';
+import { supabaseSelect, supabaseUpsert } from '../supabase';
 
 export interface PredictionRow {
   id: number;
@@ -27,37 +27,31 @@ export async function upsertPrediction(data: {
   rawJson: unknown;
   expiresAt: Date;
 }): Promise<PredictionRow> {
-  const supabase = getSupabase();
-  const { data: row, error } = await supabase
-    .from('predictions')
-    .upsert({
-      fixture_id: data.fixtureId,
-      winner_team_id: data.winnerTeamId || null,
-      winner_comment: data.winnerComment || null,
-      home_percent: data.homePercent ?? null,
-      draw_percent: data.drawPercent ?? null,
-      away_percent: data.awayPercent ?? null,
-      under_over: data.underOver || null,
-      advice: data.advice || null,
-      raw_json: data.rawJson,
-      fetched_at: new Date().toISOString(),
-      expires_at: data.expiresAt.toISOString(),
-    }, { onConflict: 'fixture_id' })
-    .select()
-    .single();
+  const result = await supabaseUpsert<PredictionRow>('predictions', {
+    fixture_id: data.fixtureId,
+    winner_team_id: data.winnerTeamId || null,
+    winner_comment: data.winnerComment || null,
+    home_percent: data.homePercent ?? null,
+    draw_percent: data.drawPercent ?? null,
+    away_percent: data.awayPercent ?? null,
+    under_over: data.underOver || null,
+    advice: data.advice || null,
+    raw_json: data.rawJson,
+    fetched_at: new Date().toISOString(),
+    expires_at: data.expiresAt.toISOString(),
+  }, { onConflict: 'fixture_id', select: '*' });
 
-  if (error) throw new Error(`DB upsert prediction: ${error.message}`);
-  return row;
+  if (result.error) throw new Error(`DB upsert prediction: ${result.error.message}`);
+  return result.data![0];
 }
 
 export async function getPrediction(fixtureId: number): Promise<PredictionRow | null> {
-  const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from('predictions')
-    .select('*')
-    .eq('fixture_id', fixtureId)
-    .single();
+  const result = await supabaseSelect<PredictionRow>('predictions', {
+    select: '*',
+    filters: { fixture_id: fixtureId },
+    limit: 1,
+  });
 
-  if (error && error.code !== 'PGRST116') throw new Error(`DB get prediction: ${error.message}`);
-  return data;
+  if (result.error) throw new Error(`DB get prediction: ${result.error.message}`);
+  return result.data?.[0] || null;
 }
