@@ -48,22 +48,20 @@ function canonicalize(obj: unknown): unknown {
 export async function getOrRunAnalysis(
   input: AnalysisInput,
   runAnalysis: (input: AnalysisInput) => Promise<unknown>,
-): Promise<{ result: unknown; fromCache: boolean; cacheDebug?: { readError?: string; writeError?: string; hash?: string } }> {
+): Promise<{ result: unknown; fromCache: boolean }> {
   const canonical = canonicalize(input);
   const inputHash = buildInputHash(canonical);
-  const cacheDebug: { readError?: string; writeError?: string; hash?: string } = { hash: inputHash.slice(0, 12) };
 
   // 1. Check cache
   try {
     const cached = await getAnalysisByHash(input.fixtureId, 'kimi-k3', inputHash);
     if (cached && cached.result) {
       console.log(`[analysisService] CACHE HIT for fixture ${input.fixtureId}, hash ${inputHash.slice(0, 8)}`);
-      return { result: cached.result, fromCache: true, cacheDebug };
+      return { result: cached.result, fromCache: true };
     }
     console.log(`[analysisService] CACHE MISS for fixture ${input.fixtureId}, hash ${inputHash.slice(0, 8)}`);
   } catch (e) {
     console.log(`[analysisService] Cache read error: ${e}`);
-    cacheDebug.readError = e instanceof Error ? e.message : String(e);
   }
 
   // 2. Run analysis
@@ -84,8 +82,7 @@ export async function getOrRunAnalysis(
     console.log(`[analysisService] CACHE SAVE for fixture ${input.fixtureId}, hash ${inputHash.slice(0, 8)}`);
   } catch (e) {
     console.log(`[analysisService] Cache write error: ${e}`);
-    cacheDebug.writeError = e instanceof Error ? e.message : String(e);
   }
 
-  return { result, fromCache: false, cacheDebug };
+  return { result, fromCache: false };
 }

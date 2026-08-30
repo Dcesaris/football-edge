@@ -43,7 +43,6 @@ interface AnalysisResponse {
   analyzedAt: string;
   fixtureId: number;
   fromCache: boolean;
-  cacheDebug?: { readError?: string; writeError?: string; hash?: string };
 }
 
 function buildPrompt(data: AnalyzeRequest): string {
@@ -195,7 +194,7 @@ export default async function handler(req: Request): Promise<Response> {
     const startTime = Date.now();
 
     // Use analysis cache (input hash deduplication)
-    const { result, fromCache, cacheDebug } = await getOrRunAnalysis(
+    const { result, fromCache } = await getOrRunAnalysis(
       {
         fixtureId: body.fixture.id,
         home: body.fixture.home,
@@ -267,7 +266,7 @@ export default async function handler(req: Request): Promise<Response> {
       analyzedAt: new Date().toISOString(),
       fixtureId: body.fixture.id,
       fromCache,
-      cacheDebug,
+
     };
 
     return jsonResponse(response);
