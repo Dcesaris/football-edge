@@ -1,5 +1,5 @@
-import type { APIFootballFixture } from './types';
-import { apiFootballFetch, jsonResponse, errorResponse, handleCORS } from './utils';
+import { jsonResponse, errorResponse, handleCORS } from './utils';
+import { getFixturesByDate, getLiveFixtures } from './data/services/fixtureService';
 
 export default async function handler(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') {
@@ -20,38 +20,29 @@ export default async function handler(req: Request): Promise<Response> {
   }
 
   try {
-    let fixtures: APIFootballFixture[] = [];
-
     if (live === 'true') {
-      // Live: ONLY use live=all (1 API call)
-      const { data } = await apiFootballFetch<APIFootballFixture[]>(
-        'fixtures',
-        { live: 'all' },
-        apiKey,
-        true,
-      );
-      fixtures = data.response;
-    } else if (date) {
-      // Date: fetch by date (1 API call)
-      const { data } = await apiFootballFetch<APIFootballFixture[]>(
-        'fixtures',
-        { date },
-        apiKey,
-        false,
-      );
-      fixtures = data.response;
+      const result = await getLiveFixtures(apiKey);
+      return jsonResponse({
+        fixtures: result.fixtures,
+        count: result.fixtures.length,
+        source: result.source,
+      });
     }
 
-    // Filter out finished/hidden statuses
-    const filtered = fixtures.filter((f) => {
-      const status = f.fixture.status.short;
-      return !['FT', 'AET', 'PEN', 'CANC', 'ABD', 'AWD', 'WO', 'PST'].includes(status);
-    });
+    if (date) {
+      const result = await getFixturesByDate(date, apiKey);
+      const filtered = result.fixtures.filter((f) => {
+        const status = f.fixture.status.short;
+        return !['FT', 'AET', 'PEN', 'CANC', 'ABD', 'AWD', 'WO', 'PST'].includes(status);
+      });
+      return jsonResponse({
+        fixtures: filtered,
+        count: filtered.length,
+        source: result.source,
+      });
+    }
 
-    return jsonResponse({
-      fixtures: filtered,
-      count: filtered.length,
-    });
+    return errorResponse('Invalid parameters', 400);
   } catch (error) {
     if (error instanceof Error) {
       if (error.message === 'RATE_LIMITED') {
