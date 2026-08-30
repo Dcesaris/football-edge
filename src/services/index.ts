@@ -1,3 +1,10 @@
-export { getFixtures, getFixtureDetail, getLiveOdds, APIError } from './football';
-export { analyzeMatch } from './analyze';
-export type { AnalyzeParams, AnalysisEntry, AnalyzeResponse } from './analyze';
+export {
+  fetchFixtures,
+  fetchFixtureDetail,
+  fetchFixtureAnalysis,
+  analyzeMatch,
+  checkAPIStatus,
+  checkAIStatus,
+} from './api';
+export type { FixtureDetailResponse, AnalysisEntry, AnalysisResponse } from './api';
+export type { AnalyzeParams, AnalysisEntry as AnalyzeEntry } from './analyze';

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Settings as SettingsIcon, AlertTriangle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { checkAPIStatus, checkAIStatus } from '../services/api';
 
 export default function SettingsPage() {
   const [riskProfile, setRiskProfile] = useState<'conservative' | 'balanced' | 'aggressive'>('balanced');
@@ -8,6 +8,13 @@ export default function SettingsPage() {
   const [minOdd, setMinOdd] = useState(1.50);
   const [maxRecs, setMaxRecs] = useState(3);
   const [reasoning, setReasoning] = useState<'fast' | 'high' | 'maximum'>('high');
+  const [apiConnected, setApiConnected] = useState<boolean | null>(null);
+  const [aiConnected, setAiConnected] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    checkAPIStatus().then(setApiConnected);
+    checkAIStatus().then(setAiConnected);
+  }, []);
 
   return (
     <>
@@ -125,8 +132,8 @@ export default function SettingsPage() {
             <div className="settings-item">
               <span className="settings-item-label">Status</span>
               <span className="settings-item-value">
-                <span className="status-dot offline" />
-                DEMO — ainda não conectado
+                <span className={`status-dot ${aiConnected === true ? 'online' : 'offline'}`} />
+                {aiConnected === null ? 'Verificando...' : aiConnected ? 'CONECTADO' : 'NÃO CONFIGURADO'}
               </span>
             </div>
           </div>
@@ -138,13 +145,9 @@ export default function SettingsPage() {
             <div className="settings-item">
               <span className="settings-item-label">API-Football</span>
               <span className="settings-item-value">
-                <span className="status-dot offline" />
-                DEMO — ainda não conectado
+                <span className={`status-dot ${apiConnected === true ? 'online' : 'offline'}`} />
+                {apiConnected === null ? 'Verificando...' : apiConnected ? 'CONECTADO' : 'NÃO CONFIGURADO'}
               </span>
-            </div>
-            <div className="settings-item">
-              <span className="settings-item-label">Quota</span>
-              <span className="settings-item-value">Indisponível</span>
             </div>
           </div>
         </div>

@@ -1,23 +1,28 @@
 import { useState } from 'react';
-import { mockAIResult } from '../mocks/data';
 import { Brain, AlertTriangle } from 'lucide-react';
+import { analyzeMatch } from '../services/api';
 
 const profileLabels = { conservative: 'Conservador', balanced: 'Equilibrado', aggressive: 'Agressivo' };
 const reasoningLabels = { fast: 'Rápido', high: 'Alto', maximum: 'Máximo' };
-const decisionLabels = { ENTER: 'ENTRAR', WATCH: 'OBSERVAR', NO_BET: 'SEM ENTRADA' };
+const decisionLabels: Record<string, string> = { ENTER: 'ENTRAR', WATCH: 'OBSERVAR', NO_BET: 'SEM ENTRADA' };
 
 export default function AIPage() {
   const [profile, setProfile] = useState<'conservative' | 'balanced' | 'aggressive'>('balanced');
   const [reasoning, setReasoning] = useState<'fast' | 'high' | 'maximum'>('high');
   const [analyzing, setAnalyzing] = useState(false);
-  const [result, setResult] = useState(mockAIResult);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleAnalyze = () => {
+  const handleAnalyze = async () => {
     setAnalyzing(true);
-    setTimeout(() => {
+    setError(null);
+    try {
+      // AIPage standalone needs a match context - for now show instruction
+      setError('Selecione uma partida e use a aba IA para analisar');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Análise falhou');
+    } finally {
       setAnalyzing(false);
-      setResult(mockAIResult);
-    }, 2000);
+    }
   };
 
   return (
@@ -81,67 +86,13 @@ export default function AIPage() {
         {analyzing ? '⏳ Analisando...' : '⚡ ANALISAR COM IA'}
       </button>
 
-      {result.entry && (
-        <div className="result-card" style={{ marginTop: 16 }}>
-          <div className="result-card-header">
-            <span className="result-badge best-entry">Melhor Entrada</span>
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{result.analyzedAt}</span>
-          </div>
-          <div className="result-card-body">
-            <div className="result-row">
-              <span className="result-label">Mercado</span>
-              <span className="result-value">{result.entry.market}</span>
-            </div>
-            <div className="result-row">
-              <span className="result-label">Odd atual</span>
-              <span className="result-value">{result.entry.currentOdd.toFixed(2)}</span>
-            </div>
-            <div className="result-row">
-              <span className="result-label">Probabilidade</span>
-              <span className="result-value">{(result.entry.probability * 100).toFixed(0)}%</span>
-            </div>
-            <div className="result-row">
-              <span className="result-label">Odd justa</span>
-              <span className="result-value">{result.entry.fairOdd.toFixed(2)}</span>
-            </div>
-            <div className="result-row">
-              <span className="result-label">Odd mínima</span>
-              <span className="result-value">{result.entry.minOdd.toFixed(2)}</span>
-            </div>
-            <div className="result-row">
-              <span className="result-label">Edge</span>
-              <span className="result-value positive">+{result.entry.edge.toFixed(1)}%</span>
-            </div>
-            <div className="result-row">
-              <span className="result-label">Risco</span>
-              <span className={`risk-badge ${result.entry.risk}`}>
-                {result.entry.risk === 'low' ? 'Baixo' : result.entry.risk === 'moderate' ? 'Moderado' : 'Alto'}
-              </span>
-            </div>
-            <div className="result-row">
-              <span className="result-label">Confiança</span>
-              <span className="result-value">{result.entry.confidence}%</span>
-            </div>
-            <div className="result-row">
-              <span className="result-label">Decisão</span>
-              <span className={`decision-badge ${result.entry.decision}`}>
-                {decisionLabels[result.entry.decision]}
-              </span>
-            </div>
-          </div>
-          <div className="result-explanation">
-            <div className="result-explanation-title">💡 POR QUE ESTA ENTRADA?</div>
-            <div className="result-explanation-text">{result.entry.explanation}</div>
-          </div>
-        </div>
-      )}
-
-      {!result.entry && (
+      {error && (
         <div className="empty-state" style={{ marginTop: 16 }}>
           <AlertTriangle size={48} style={{ color: 'var(--text-muted)', marginBottom: 16 }} />
-          <div className="empty-state-title">SEM ENTRADA</div>
+          <div className="empty-state-title">IA não configurada</div>
           <div className="empty-state-text">
-            Nenhum mercado apresenta relação probabilidade × risco × odd suficiente neste momento.
+            Selecione uma partida e use a aba IA para analisar mercados específicos.
+            Configure NVIDIA_API_KEY para ativar a análise.
           </div>
         </div>
       )}
