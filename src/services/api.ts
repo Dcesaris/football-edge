@@ -1,4 +1,4 @@
-import type { Match, Team, League } from '../types';
+import type { Match, Team } from '../types';
 
 const FUNCTIONS_BASE = '/.netlify/functions';
 
@@ -160,15 +160,11 @@ function apiFixtureToMatch(f: APIFootballFixtureResponse): Match {
 // Public API
 
 export async function fetchFixtures(date: string, live = false): Promise<Match[]> {
-  try {
-    const data = await fetchFunction<FixturesApiResponse>('fixtures', {
-      date,
-      live: live ? 'true' : 'false',
-    });
-    return (data.fixtures || []).map(apiFixtureToMatch);
-  } catch {
-    return [];
-  }
+  const data = await fetchFunction<FixturesApiResponse>('fixtures', {
+    date,
+    live: live ? 'true' : 'false',
+  });
+  return (data.fixtures || []).map(apiFixtureToMatch);
 }
 
 export async function fetchFixtureDetail(id: string, live = false): Promise<FixtureDetailResponse> {
@@ -194,20 +190,11 @@ export async function analyzeMatch(data: Record<string, unknown>): Promise<Analy
   });
 }
 
-export async function checkAPIStatus(): Promise<boolean> {
-  try {
-    await fetchFunction<unknown>('fixtures', { date: new Date().toISOString().split('T')[0] });
-    return true;
-  } catch {
-    return false;
-  }
+export interface StatusResponse {
+  apiFootballConfigured: boolean;
+  nvidiaConfigured: boolean;
 }
 
-export async function checkAIStatus(): Promise<boolean> {
-  try {
-    const res = await fetch(`${FUNCTIONS_BASE}/analyze`, { method: 'OPTIONS' });
-    return res.ok || res.status === 200;
-  } catch {
-    return false;
-  }
+export async function checkStatus(): Promise<StatusResponse> {
+  return fetchFunction<StatusResponse>('status');
 }

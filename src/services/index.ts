@@ -3,8 +3,6 @@ export {
   fetchFixtureDetail,
   fetchFixtureAnalysis,
   analyzeMatch,
-  checkAPIStatus,
-  checkAIStatus,
+  checkStatus,
 } from './api';
-export type { FixtureDetailResponse, AnalysisEntry, AnalysisResponse } from './api';
-export type { AnalyzeParams, AnalysisEntry as AnalyzeEntry } from './analyze';
+export type { FixtureDetailResponse, AnalysisEntry, AnalysisResponse, StatusResponse } from './api';

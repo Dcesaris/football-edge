@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { checkAPIStatus, checkAIStatus } from '../services/api';
+import { checkStatus } from '../services/api';
 
 export default function SettingsPage() {
   const [riskProfile, setRiskProfile] = useState<'conservative' | 'balanced' | 'aggressive'>('balanced');
@@ -8,12 +8,19 @@ export default function SettingsPage() {
   const [minOdd, setMinOdd] = useState(1.50);
   const [maxRecs, setMaxRecs] = useState(3);
   const [reasoning, setReasoning] = useState<'fast' | 'high' | 'maximum'>('high');
-  const [apiConnected, setApiConnected] = useState<boolean | null>(null);
-  const [aiConnected, setAiConnected] = useState<boolean | null>(null);
+  const [apiConfigured, setApiConfigured] = useState<boolean | null>(null);
+  const [nvidiaConfigured, setNvidiaConfigured] = useState<boolean | null>(null);
 
   useEffect(() => {
-    checkAPIStatus().then(setApiConnected);
-    checkAIStatus().then(setAiConnected);
+    checkStatus()
+      .then((s) => {
+        setApiConfigured(s.apiFootballConfigured);
+        setNvidiaConfigured(s.nvidiaConfigured);
+      })
+      .catch(() => {
+        setApiConfigured(false);
+        setNvidiaConfigured(false);
+      });
   }, []);
 
   return (
@@ -132,8 +139,8 @@ export default function SettingsPage() {
             <div className="settings-item">
               <span className="settings-item-label">Status</span>
               <span className="settings-item-value">
-                <span className={`status-dot ${aiConnected === true ? 'online' : 'offline'}`} />
-                {aiConnected === null ? 'Verificando...' : aiConnected ? 'CONECTADO' : 'NÃO CONFIGURADO'}
+                <span className={`status-dot ${nvidiaConfigured ? 'online' : 'offline'}`} />
+                {nvidiaConfigured === null ? 'Verificando...' : nvidiaConfigured ? 'CONFIGURADO' : 'NÃO CONFIGURADO'}
               </span>
             </div>
           </div>
@@ -145,8 +152,8 @@ export default function SettingsPage() {
             <div className="settings-item">
               <span className="settings-item-label">API-Football</span>
               <span className="settings-item-value">
-                <span className={`status-dot ${apiConnected === true ? 'online' : 'offline'}`} />
-                {apiConnected === null ? 'Verificando...' : apiConnected ? 'CONECTADO' : 'NÃO CONFIGURADO'}
+                <span className={`status-dot ${apiConfigured ? 'online' : 'offline'}`} />
+                {apiConfigured === null ? 'Verificando...' : apiConfigured ? 'CONFIGURADO' : 'NÃO CONFIGURADO'}
               </span>
             </div>
           </div>
